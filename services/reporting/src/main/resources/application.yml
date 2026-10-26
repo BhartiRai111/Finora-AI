@@ -1,0 +1,53 @@
+# reporting service configuration. Defaults are for local development only.
+# Secrets are never stored here: passwords come from the environment (see .env.example).
+spring:
+  application:
+    name: reporting
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://${FINORA_DB_HOST:localhost}:${FINORA_DB_PORT:5432}/finora_reporting}
+    username: ${DB_USER:finora_reporting_app}
+    password: ${DB_PASSWORD:${FINORA_DEV_DB_PASSWORD:}}
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    url: ${DB_MIGRATION_URL:jdbc:postgresql://${FINORA_DB_HOST:localhost}:${FINORA_DB_PORT:5432}/finora_reporting}
+    user: ${DB_MIGRATION_USER:finora_reporting_migrator}
+    password: ${DB_MIGRATION_PASSWORD:${FINORA_DEV_DB_PASSWORD:}}
+    placeholders:
+      app_role: ${DB_USER:finora_reporting_app}
+
+server:
+  # Services are private by default: loopback only. Exposure beyond localhost needs an approved deployment decision.
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${SERVER_PORT:8085}
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      show-components: never
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db,internalToken
+
+finora:
+  security:
+    internal-token:
+      # Only the gateway is trusted by default; add a service under trusted-issuers when an approved
+      # internal contract lets it call this service (one public key per caller, no shared secrets).
+      trusted-issuers:
+        gateway:
+          public-key-path: ${FINORA_KEYS_DIR:.dev-keys}/gateway.pub.pem

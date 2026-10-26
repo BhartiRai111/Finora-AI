@@ -22,3 +22,4 @@ dist/
 .vscode/
 .DS_Store
 *.log
+.dev-keys/

@@ -12,9 +12,11 @@ Microservices (Option A), Java 21 + Spring Boot 4.1.2, Maven, Flyway, PostgreSQL
 |---|---|
 | `services/<name>` | One Spring Boot service per approved boundary: `api-gateway`, `identity-access`, `finance`, `document`, `ingestion-integration`, `reporting`, `intelligence`, `platform`, `audit`, `admin-plane` |
 | `libs/finance-core` | Shared pure calculation library (empty by design until money/rounding policy is decided) |
-| `libs/service-testkit` | Test-only base classes (health, exposure, database-privilege checks) |
+| `libs/service-commons` | Cross-cutting technical code (no business logic): correlation ids, safe problem errors, internal token auth, resilient downstream client, idempotency/outbox/inbox persistence |
+| `libs/service-testkit` | Test-only base classes and helpers (health, exposure, internal-auth, database-privilege and service-communication checks; throw-away keys; loopback stub server) |
 | `db/<service>/migrations` | Flyway migrations, owned by exactly one service; packaged into that service at build time |
 | `web` | Next.js application |
+| `tools/gen-dev-keys.sh` | Throw-away P-256 keys for local internal service authentication (`.dev-keys/`, git-ignored) |
 | `tools/dev-postgres.sh` | Local PostgreSQL 16 with one database and two roles (migrator, runtime) per service |
 | `.github/workflows/ci.yml` | CI: backend (Maven + PostgreSQL) and web (lint, typecheck, test, build) |
 
@@ -38,10 +40,21 @@ cd web && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm 
 Run one service: `./mvnw -pl services/finance spring-boot:run` (health: `http://127.0.0.1:8082/actuator/health`).
 When running as root (for example in a container), the script runs PostgreSQL as the `postgres` OS user and needs `FINORA_PG_DATA` outside your home directory.
 
+## Gateway and service communication (Step 14)
+- **Edge:** `api-gateway` is the only public entry for `/v1/**`. It validates request shape, matches one explicit route (longest match), rate limits (in memory, single replica), authenticates the session, mints a short-lived token for the single owning service, forwards allowlisted headers only, and maps failures to safe `application/problem+json` (`UPSTREAM_TIMEOUT` 504, `UPSTREAM_UNAVAILABLE` 503, `UPSTREAM_ERROR` 502). `/internal/**` and `/admin/**` are never routed.
+- **Private services:** every service requires an internal token (ES256, one audience, 2-minute default lifetime) on everything except `/actuator/health/**`. Only the gateway can assert end users; services assert themselves. A user token must match the workspace in the path. Add a calling service under `finora.security.internal-token.trusted-issuers.<name>.public-key-path` only after an internal contract for it is approved.
+- **Correlation:** `X-Request-Id` (UUID) and `traceparent` are validated, generated when absent, forwarded and echoed.
+- **Resilience:** per-attempt timeout and total deadline; retries only for idempotent methods or requests with `Idempotency-Key` (a refused connection is retried for any request); circuit breaker and bulkhead per downstream.
+- **Persistence:** each database-owning service has `idempotency_keys`, `outbox_events` and `inbox_events` (migration V2). The outbox is storage only: no relay, broker or transport exists.
+- **Local keys:** `tools/gen-dev-keys.sh` writes `.dev-keys/gateway.{key,pub}.pem`; set `FINORA_KEYS_DIR` to use another directory. Tests generate their own keys in memory.
+
 ## Configuration and secrets
 Defaults in each `application.yml` are for local development. Passwords come from the environment only (`FINORA_DEV_DB_PASSWORD`, or `DB_PASSWORD`/`DB_MIGRATION_PASSWORD` per service). No secret belongs in this repository; `.env*` files are git-ignored except `.env.example`.
 
 ## Known limitations
 - Tests require a running PostgreSQL; there is no Testcontainers setup because the development sandbox has no Docker daemon.
 - CI workflow has not been executed on GitHub yet; GitHub Actions are referenced by major-version tag, not pinned by commit SHA.
-- No authentication, gateway routing, inter-service communication, or message transport exists yet; those require further owner approvals.
+- **The gateway cannot authenticate end users yet:** session validation belongs to identity-access, which is not built. Until a `SessionAuthenticator` is provided the gateway fails closed (session-required routes return 401). CSRF checks are part of that same work.
+- No message transport/broker (PD-04), no mTLS (deployment platform undecided, PD-08), no job router (`/v1/jobs/{id}`), no streaming (SSE) through the gateway, and no row-level security/tenant context yet.
+- Rate limiting is in memory and per gateway replica; response bodies are buffered (no size cap on downstream responses yet); numeric timeouts and limits are engineering defaults, not owner-approved values (DEC-50).
+- Cross-process behaviour was checked locally with the packaged jars (gateway + identity-access), not in CI or on real infrastructure.

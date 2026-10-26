@@ -11,11 +11,21 @@
   </parent>
   <artifactId>service-testkit</artifactId>
   <name>service-testkit</name>
-  <description>Test-only base classes shared by service modules (health, exposure and database-privilege checks). Never a runtime dependency.</description>
+  <description>Test-only base classes shared by service modules (health, exposure, internal-authentication, database-privilege and service-communication checks). Never a runtime dependency.</description>
   <dependencies>
+    <dependency>
+      <groupId>com.finora</groupId>
+      <artifactId>service-commons</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jdbc</artifactId>
+      <!-- Only database-owning services have it; the gateway and admin-plane must not inherit a DataSource. -->
+      <optional>true</optional>
     </dependency>
   </dependencies>
 </project>

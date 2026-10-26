@@ -41,4 +41,13 @@ management:
         liveness:
           include: livenessState
         readiness:
-          include: readinessState,db
+          include: readinessState,db,internalToken
+
+finora:
+  security:
+    internal-token:
+      # Only the gateway is trusted by default; add a service under trusted-issuers when an approved
+      # internal contract lets it call this service (one public key per caller, no shared secrets).
+      trusted-issuers:
+        gateway:
+          public-key-path: ${FINORA_KEYS_DIR:.dev-keys}/gateway.pub.pem

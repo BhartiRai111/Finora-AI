@@ -29,4 +29,32 @@ management:
         liveness:
           include: livenessState
         readiness:
-          include: readinessState
+          include: readinessState,gatewayRoutes
+
+finora:
+  security:
+    internal-token:
+      # The gateway authenticates browser sessions itself; it does not accept internal tokens.
+      verify-incoming: false
+      signing:
+        issuer: gateway
+        private-key-path: ${FINORA_KEYS_DIR:.dev-keys}/gateway.key.pem
+        ttl: 2m
+  gateway:
+    # Owning services are private (loopback by default); the gateway is the only caller of the public API.
+    services:
+      identity-access: ${IDENTITY_ACCESS_URL:http://127.0.0.1:8081}
+      finance: ${FINANCE_URL:http://127.0.0.1:8082}
+      document: ${DOCUMENT_URL:http://127.0.0.1:8083}
+      ingestion-integration: ${INGESTION_INTEGRATION_URL:http://127.0.0.1:8084}
+      reporting: ${REPORTING_URL:http://127.0.0.1:8085}
+      intelligence: ${INTELLIGENCE_URL:http://127.0.0.1:8086}
+      platform: ${PLATFORM_URL:http://127.0.0.1:8087}
+      audit: ${AUDIT_URL:http://127.0.0.1:8088}
+    read-timeout: 5s
+    write-timeout: 10s
+    max-retries: 2
+    max-body-bytes: 1048576
+    max-upload-bytes: 26214400
+    rate-limit:
+      enabled: true

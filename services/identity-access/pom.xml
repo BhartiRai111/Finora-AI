@@ -39,6 +39,10 @@
     </dependency>
     <dependency>
       <groupId>com.finora</groupId>
+      <artifactId>service-commons</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>com.finora</groupId>
       <artifactId>service-testkit</artifactId>
       <scope>test</scope>
     </dependency>

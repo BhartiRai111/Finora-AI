@@ -19,6 +19,7 @@
   <description>Finora AI services (owner-approved: microservices, Java 21, Spring Boot 4.1.2, Maven, Flyway, PostgreSQL)</description>
 
   <properties>
+    <resilience4j.version>2.4.0</resilience4j.version>
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -26,6 +27,7 @@
 
   <modules>
     <module>libs/finance-core</module>
+    <module>libs/service-commons</module>
     <module>libs/service-testkit</module>
     <module>services/api-gateway</module>
     <module>services/identity-access</module>
@@ -45,6 +47,21 @@
         <groupId>com.finora</groupId>
         <artifactId>finance-core</artifactId>
         <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.finora</groupId>
+        <artifactId>service-commons</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-circuitbreaker</artifactId>
+        <version>${resilience4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <artifactId>resilience4j-bulkhead</artifactId>
+        <version>${resilience4j.version}</version>
       </dependency>
       <dependency>
         <groupId>com.finora</groupId>

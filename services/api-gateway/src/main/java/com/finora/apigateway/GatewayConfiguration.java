@@ -9,6 +9,8 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import tools.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.health.contributor.Health;
@@ -29,8 +31,10 @@ class GatewayConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(SessionAuthenticator.class)
-    SessionAuthenticator sessionAuthenticator() {
-        return new FailClosedSessionAuthenticator();
+    SessionAuthenticator sessionAuthenticator(Downstreams downstreams, InternalTokenIssuer issuer, ObjectMapper mapper,
+            GatewayProperties props, @Value("${finora.auth.cookie.secure:true}") boolean secureCookie) {
+        return new IdentitySessionAuthenticator(downstreams.byService().get("identity-access"), issuer, mapper,
+                secureCookie ? "__Host-finora_sid" : "finora_sid", props.getReadTimeout());
     }
 
     @Bean

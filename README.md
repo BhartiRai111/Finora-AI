@@ -12,6 +12,7 @@ Microservices (Option A), Java 21 + Spring Boot 4.1.2, Maven, Flyway, PostgreSQL
 |---|---|
 | `services/<name>` | One Spring Boot service per approved boundary: `api-gateway`, `identity-access`, `finance`, `document`, `ingestion-integration`, `reporting`, `intelligence`, `platform`, `audit`, `admin-plane` |
 | `libs/finance-core` | Shared pure calculation library (empty by design until money/rounding policy is decided) |
+| `tests/e2e` | End-to-end tests: start the packaged gateway and identity-access jars as separate processes against PostgreSQL (needs `./mvnw verify`) |
 | `libs/service-commons` | Cross-cutting technical code (no business logic): correlation ids, safe problem errors, internal token auth, resilient downstream client, idempotency/outbox/inbox persistence |
 | `libs/service-testkit` | Test-only base classes and helpers (health, exposure, internal-auth, database-privilege and service-communication checks; throw-away keys; loopback stub server) |
 | `db/<service>/migrations` | Flyway migrations, owned by exactly one service; packaged into that service at build time |
@@ -48,13 +49,16 @@ When running as root (for example in a container), the script runs PostgreSQL as
 - **Persistence:** each database-owning service has `idempotency_keys`, `outbox_events` and `inbox_events` (migration V2). The outbox is storage only: no relay, broker or transport exists.
 - **Local keys:** `tools/gen-dev-keys.sh` writes `.dev-keys/gateway.{key,pub}.pem`; set `FINORA_KEYS_DIR` to use another directory. Tests generate their own keys in memory.
 
+## Identity and sessions (Step 15)
+First-party server-side opaque sessions in identity-access, validated by the gateway on every request; Argon2id passwords; CSRF token + Origin check; login throttling; expiring single-use reset tokens. Details, defaults and gaps: [`docs/identity-auth.md`](docs/identity-auth.md).
+
 ## Configuration and secrets
 Defaults in each `application.yml` are for local development. Passwords come from the environment only (`FINORA_DEV_DB_PASSWORD`, or `DB_PASSWORD`/`DB_MIGRATION_PASSWORD` per service). No secret belongs in this repository; `.env*` files are git-ignored except `.env.example`.
 
 ## Known limitations
 - Tests require a running PostgreSQL; there is no Testcontainers setup because the development sandbox has no Docker daemon.
 - CI workflow has not been executed on GitHub yet; GitHub Actions are referenced by major-version tag, not pinned by commit SHA.
-- **The gateway cannot authenticate end users yet:** session validation belongs to identity-access, which is not built. Until a `SessionAuthenticator` is provided the gateway fails closed (session-required routes return 401). CSRF checks are part of that same work.
+- Authentication (Step 15) is implemented: see `docs/identity-auth.md`. **Password-reset email cannot be delivered** (no provider configured), MFA and email verification are not implemented, and workspace membership/authorization is Step 16, so every `/v1/spaces/{id}/**` path returns 404 for now.
 - No message transport/broker (PD-04), no mTLS (deployment platform undecided, PD-08), no job router (`/v1/jobs/{id}`), no streaming (SSE) through the gateway, and no row-level security/tenant context yet.
 - Rate limiting is in memory and per gateway replica; response bodies are buffered (no size cap on downstream responses yet); numeric timeouts and limits are engineering defaults, not owner-approved values (DEC-50).
 - Cross-process behaviour was checked locally with the packaged jars (gateway + identity-access), not in CI or on real infrastructure.

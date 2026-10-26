@@ -20,6 +20,7 @@
 
   <properties>
     <resilience4j.version>2.4.0</resilience4j.version>
+    <bouncycastle.version>1.86</bouncycastle.version>
     <java.version>21</java.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -39,6 +40,8 @@
     <module>services/platform</module>
     <module>services/audit</module>
     <module>services/admin-plane</module>
+    <!-- Must stay last: needs the packaged service jars. -->
+    <module>tests/e2e</module>
   </modules>
 
   <dependencyManagement>
@@ -62,6 +65,11 @@
         <groupId>io.github.resilience4j</groupId>
         <artifactId>resilience4j-bulkhead</artifactId>
         <version>${resilience4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.bouncycastle</groupId>
+        <artifactId>bcprov-jdk18on</artifactId>
+        <version>${bouncycastle.version}</version>
       </dependency>
       <dependency>
         <groupId>com.finora</groupId>

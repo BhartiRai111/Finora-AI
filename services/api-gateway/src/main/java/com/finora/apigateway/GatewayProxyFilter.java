@@ -121,10 +121,30 @@ public class GatewayProxyFilter extends OncePerRequestFilter {
             }
         }
 
-        Optional<SessionIdentity> identity = authenticator.authenticate(request);
+        boolean mutating = !method.equals("GET");
+        String origin = request.getHeader("Origin");
+        if (mutating && origin != null && !props.getAllowedOrigins().contains(origin)) {
+            problems.write(request, response, ErrorCode.CSRF_INVALID, null, null);
+            return;
+        }
+        Optional<SessionIdentity> identity;
+        try {
+            identity = authenticator.authenticate(request);
+        } catch (DownstreamFailure failure) {
+            LOG.warn("Session validation unavailable for {} {}: {} ({})", method, rawPath, failure.kind(), failure.getMessage());
+            ErrorCode code = failure.errorCode();
+            problems.write(request, response, code, null, code == ErrorCode.UPSTREAM_UNAVAILABLE ? 5 : null);
+            return;
+        }
         if (identity.isEmpty() && route.access() == Route.Access.SESSION_REQUIRED) {
             response.setHeader("WWW-Authenticate", "Cookie");
             problems.write(request, response, ErrorCode.AUTH_REQUIRED, null, null);
+            return;
+        }
+
+        if (mutating && identity.isPresent() && route.access() == Route.Access.SESSION_REQUIRED
+                && !identity.get().csrfValid()) {
+            problems.write(request, response, ErrorCode.CSRF_INVALID, null, null);
             return;
         }
 

@@ -54,6 +54,11 @@ public final class TestKeys {
         return write(name + ".key.pem", "PRIVATE KEY", pair(name).getPrivate().getEncoded());
     }
 
+    /** Writes {@code <name>.key.pem} and {@code <name>.pub.pem} and returns the directory that holds them. */
+    public static synchronized Path exportPair(String name) {
+        return publicPem(name).getParent().resolve(privatePem(name).getFileName()).getParent();
+    }
+
     private static Path write(String file, String label, byte[] der) {
         try {
             if (dir == null) {

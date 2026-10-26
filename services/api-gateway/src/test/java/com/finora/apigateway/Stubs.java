@@ -2,7 +2,9 @@ package com.finora.apigateway;
 
 import com.finora.testkit.StubServer;
 import java.io.IOException;
-import java.net.ServerSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -14,8 +16,12 @@ final class Stubs {
     static final List<String> SERVICES = List.of("identity-access", "finance", "document", "ingestion-integration",
             "reporting", "intelligence", "platform", "audit");
     private static final Map<String, StubServer> SERVERS = new LinkedHashMap<>();
-    /** A port that nothing listens on: models a service that is down. */
-    static final int DEAD_PORT = freePort();
+    /**
+     * A port that refuses connections: models a service that is down. The port is held by a bound-but-never-listening
+     * socket for the life of the JVM, so no other server can take it (connecting to it fails with "connection refused").
+     */
+    private static final Socket DEAD_PORT_HOLDER = new Socket();
+    static final int DEAD_PORT = reserveDeadPort();
 
     static {
         for (String s : SERVICES) {
@@ -43,9 +49,10 @@ final class Stubs {
         registry.add("finora.gateway.services." + downService, () -> "http://127.0.0.1:" + DEAD_PORT);
     }
 
-    private static int freePort() {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
+    private static int reserveDeadPort() {
+        try {
+            DEAD_PORT_HOLDER.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0));
+            return DEAD_PORT_HOLDER.getLocalPort();
         } catch (IOException e) {
             throw new IllegalStateException(e);
         }

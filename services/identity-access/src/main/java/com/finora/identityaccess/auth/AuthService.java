@@ -34,12 +34,16 @@ public class AuthService {
 
     /** A newly created session. {@code token} is shown once (set in the cookie) and never stored. */
     public record IssuedSession(UUID sessionId, String token, String csrfToken, OffsetDateTime absoluteExpiresAt,
-            User user) {
+            User user, boolean mfaRequired) {
     }
 
-    public record Validation(boolean valid, UUID userId, UUID sessionId, boolean csrfValid) {
+    public record Membership(UUID workspaceId, UUID membershipId, String role) {
+    }
+
+    public record Validation(boolean valid, UUID userId, UUID sessionId, boolean csrfValid, boolean mfaPending,
+            OffsetDateTime stepUpUntil, List<Membership> memberships) {
         static Validation invalid() {
-            return new Validation(false, null, null, false);
+            return new Validation(false, null, null, false, false, null, List.of());
         }
     }
 
@@ -95,6 +99,8 @@ public class AuthService {
         try {
             tx.executeWithoutResult(s -> {
                 repo.insertUser(id, email.trim(), normalized, name, hash, now);
+                // Personal profile: its own tenant, with the user as sole Owner (PRD §2).
+                repo.insertPersonalWorkspace(UUID.randomUUID(), UUID.randomUUID(), id, now);
                 repo.insertEvent("REGISTERED", id, CorrelationId.current(), now);
             });
         } catch (DuplicateKeyException e) {
@@ -136,13 +142,14 @@ public class AuthService {
             if (presentedSessionId != null) {
                 repo.revokeSession(presentedSessionId, "ROTATED", now);
             }
-            IssuedSession issued = createSession(row, now);
+            // A user with a confirmed second factor gets a session that can do nothing but complete MFA.
+            IssuedSession issued = createSession(row, now, repo.hasConfirmedMfa(row.id()), null);
             repo.insertEvent("LOGIN_SUCCESS", row.id(), CorrelationId.current(), now);
             return issued;
         });
     }
 
-    private void recordFailure(String key, UUID userId) {
+    void recordFailure(String key, UUID userId) {
         OffsetDateTime now = now();
         AuthProperties.Lockout cfg = props.getLockout();
         tx.executeWithoutResult(s -> {
@@ -160,17 +167,61 @@ public class AuthService {
         });
     }
 
-    private IssuedSession createSession(AuthRepository.UserRow user, OffsetDateTime now) {
+    /** Package-visible so MFA and password flows can issue rotated sessions with the right assurance. */
+    IssuedSession createSession(AuthRepository.UserRow user, OffsetDateTime now, boolean mfaPending,
+            OffsetDateTime mfaVerifiedAt) {
         String token = Tokens.newToken();
         String csrf = Tokens.newToken();
         UUID sessionId = UUID.randomUUID();
         OffsetDateTime absolute = now.plus(props.getAbsoluteTimeout());
-        repo.insertSession(sessionId, user.id(), Tokens.hash(token), csrf, now, absolute);
-        return new IssuedSession(sessionId, token, csrf, absolute, toUser(user));
+        repo.insertSession(sessionId, user.id(), Tokens.hash(token), csrf, now, absolute, mfaPending, mfaVerifiedAt);
+        return new IssuedSession(sessionId, token, csrf, absolute, toUser(user), mfaPending);
     }
 
     private static User toUser(AuthRepository.UserRow row) {
         return new User(row.id(), row.email(), row.displayName(), row.emailVerifiedAt() != null, row.createdAt());
+    }
+
+    /** Package-visible throttle helpers shared with the MFA flow. */
+    void assertNotLocked(String key) {
+        OffsetDateTime now = now();
+        Optional<AuthRepository.ThrottleRow> throttle = repo.readThrottle(key);
+        if (throttle.isPresent() && throttle.get().lockedUntil() != null && throttle.get().lockedUntil().isAfter(now)) {
+            throw new ApiException(ErrorCode.RATE_LIMITED, "Too many failed attempts",
+                    (int) Math.max(1, Duration.between(now, throttle.get().lockedUntil()).toSeconds() + 1));
+        }
+    }
+
+    void clearThrottle(String key) {
+        repo.deleteThrottle(key);
+    }
+
+    /** What the authorization layer needs to know about the caller's live session. */
+    public record ActiveSession(UUID sessionId, UUID userId, boolean mfaPending, OffsetDateTime mfaVerifiedAt,
+            OffsetDateTime stepUpUntil) {
+    }
+
+    /** Rejects a session that is revoked/expired in the database, or (unless allowed) still waiting for MFA. */
+    public ActiveSession requireActiveSession(UUID sessionId, boolean allowMfaPending) {
+        return toActive(requireActiveRow(sessionId, allowMfaPending));
+    }
+
+    private static ActiveSession toActive(AuthRepository.SessionRow r) {
+        return new ActiveSession(r.id(), r.userId(), r.mfaPending(), r.mfaVerifiedAt(), r.stepUpUntil());
+    }
+
+    AuthRepository.SessionRow requireActiveRow(UUID sessionId, boolean allowMfaPending) {
+        AuthRepository.SessionRow row = repo.findSessionById(sessionId)
+                .orElseThrow(() -> new ApiException(ErrorCode.AUTH_REQUIRED, null));
+        OffsetDateTime now = now();
+        if (row.revokedAt() != null || !"ACTIVE".equals(row.userStatus()) || !now.isBefore(row.absoluteExpiresAt())
+                || !now.isBefore(row.lastSeenAt().plus(props.getIdleTimeout()))) {
+            throw new ApiException(ErrorCode.AUTH_REQUIRED, null);
+        }
+        if (row.mfaPending() && !allowMfaPending) {
+            throw new ApiException(ErrorCode.MFA_REQUIRED, "Complete multi-factor authentication first");
+        }
+        return row;
     }
 
     // ---- sessions ----
@@ -200,7 +251,11 @@ public class AuthService {
         }
         boolean csrfValid = csrfToken != null && !csrfToken.isEmpty() && csrfToken.length() <= 128
                 && Tokens.constantTimeEquals(session.csrfToken(), csrfToken);
-        return new Validation(true, session.userId(), session.id(), csrfValid);
+        List<Membership> memberships = session.mfaPending() ? List.of()
+                : repo.activeMemberships(session.userId()).stream()
+                        .map(m -> new Membership(m.workspaceId(), m.membershipId(), m.role())).toList();
+        return new Validation(true, session.userId(), session.id(), csrfValid, session.mfaPending(),
+                session.stepUpUntil(), memberships);
     }
 
     public void logout(UUID sessionId, UUID userId) {
@@ -216,6 +271,23 @@ public class AuthService {
                 .orElseThrow(() -> new ApiException(ErrorCode.AUTH_REQUIRED, null));
     }
 
+    public User updateDisplayName(UUID userId, String displayName) {
+        String name = displayName == null ? "" : displayName.trim();
+        if (name.isEmpty() || name.length() > 100 || name.chars().anyMatch(Character::isISOControl)) {
+            throw new ApiException(ErrorCode.VALIDATION_FAILED, "display_name must be 1-100 characters without control characters");
+        }
+        OffsetDateTime now = now();
+        tx.executeWithoutResult(s -> {
+            repo.updateDisplayName(userId, name, now);
+            repo.insertEvent("PROFILE_UPDATED", userId, CorrelationId.current(), now);
+        });
+        return profile(userId);
+    }
+
+    public boolean mfaEnabled(UUID userId) {
+        return repo.hasConfirmedMfa(userId);
+    }
+
     public String csrfTokenFor(UUID sessionId) {
         return repo.findSessionById(sessionId).filter(r -> r.revokedAt() == null)
                 .map(AuthRepository.SessionRow::csrfToken)
@@ -225,7 +297,7 @@ public class AuthService {
     // ---- password change / reset ----
 
     /** Changes the password, revokes every session (including the caller's) and issues a fresh one. */
-    public IssuedSession changePassword(UUID userId, String currentPassword, String newPassword) {
+    public IssuedSession changePassword(UUID userId, UUID currentSessionId, String currentPassword, String newPassword) {
         AuthRepository.UserRow user = repo.findUserById(userId)
                 .orElseThrow(() -> new ApiException(ErrorCode.AUTH_REQUIRED, null));
         String key = HexFormat.of().formatHex(Tokens.hashEmailKey(normalizeEmail(user.email())));
@@ -244,12 +316,14 @@ public class AuthService {
             throw new ApiException(ErrorCode.VALIDATION_FAILED, String.join("; ", problems));
         }
         String hash = passwords.hash(newPassword);
+        // The replacement session keeps the MFA assurance of the one it replaces.
+        OffsetDateTime keptMfa = repo.findSessionById(currentSessionId).map(AuthRepository.SessionRow::mfaVerifiedAt).orElse(null);
         return tx.execute(s -> {
             repo.updatePassword(userId, hash, now);
             repo.revokeAllSessions(userId, "PASSWORD_CHANGED", now);
             repo.deleteThrottle(key);
             repo.invalidateUnusedResetTokens(userId, now);
-            IssuedSession issued = createSession(user, now);
+            IssuedSession issued = createSession(user, now, false, keptMfa);
             repo.insertEvent("PASSWORD_CHANGED", userId, CorrelationId.current(), now);
             return issued;
         });

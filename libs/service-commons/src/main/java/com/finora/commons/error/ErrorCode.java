@@ -9,6 +9,8 @@ public enum ErrorCode {
     INVALID_CREDENTIALS(401, "Invalid credentials"),
     FORBIDDEN(403, "Forbidden"),
     CSRF_INVALID(403, "Request rejected"),
+    MFA_REQUIRED(403, "Multi-factor authentication required"),
+    STEP_UP_REQUIRED(403, "Recent re-authentication required"),
     NOT_FOUND(404, "Not found"),
     METHOD_NOT_ALLOWED(405, "Method not allowed"),
     PAYLOAD_TOO_LARGE(413, "Payload too large"),
@@ -19,6 +21,7 @@ public enum ErrorCode {
     IDEMPOTENCY_KEY_REUSED(422, "Idempotency key reused with a different request"),
     RATE_LIMITED(429, "Too many requests"),
     INTERNAL(500, "Internal error"),
+    FEATURE_UNAVAILABLE(503, "Feature unavailable"),
     UPSTREAM_ERROR(502, "Upstream error"),
     UPSTREAM_UNAVAILABLE(503, "Upstream unavailable"),
     UPSTREAM_TIMEOUT(504, "Upstream timeout");

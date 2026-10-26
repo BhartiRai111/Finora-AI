@@ -14,6 +14,8 @@ public class AuthProperties {
     private Duration resetTokenTtl = Duration.ofMinutes(30);
     private Duration resetRequestInterval = Duration.ofSeconds(60);
     private Duration touchInterval = Duration.ofSeconds(60);
+    private Duration stepUpTtl = Duration.ofMinutes(10);
+    private final Mfa mfa = new Mfa();
 
     public static class Cookie {
         /** Secure cookies (HTTPS). Only switch off for plain-HTTP local development. */
@@ -74,6 +76,40 @@ public class AuthProperties {
         public void setWindow(Duration window) {
             this.window = window;
         }
+    }
+
+    public static class Mfa {
+        /** File holding a base64-encoded 256-bit key used to encrypt TOTP secrets. Without it MFA cannot be enrolled. */
+        private String encryptionKeyPath;
+        private String issuerName = "Finora AI";
+
+        public String getEncryptionKeyPath() {
+            return encryptionKeyPath;
+        }
+
+        public void setEncryptionKeyPath(String encryptionKeyPath) {
+            this.encryptionKeyPath = encryptionKeyPath;
+        }
+
+        public String getIssuerName() {
+            return issuerName;
+        }
+
+        public void setIssuerName(String issuerName) {
+            this.issuerName = issuerName;
+        }
+    }
+
+    public Mfa getMfa() {
+        return mfa;
+    }
+
+    public Duration getStepUpTtl() {
+        return stepUpTtl;
+    }
+
+    public void setStepUpTtl(Duration stepUpTtl) {
+        this.stepUpTtl = stepUpTtl;
     }
 
     public String cookieName() {

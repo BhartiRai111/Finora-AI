@@ -8,6 +8,7 @@ import com.finora.commons.security.InternalTokenVerifier;
 import com.finora.commons.security.PrincipalKind;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -16,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -43,6 +45,18 @@ public class AuthController {
     public record ResetConfirmRequest(String token, @JsonProperty("new_password") String newPassword) {
     }
 
+    public record StepUpRequest(String password, String code, @JsonProperty("recovery_code") String recoveryCode) {
+    }
+
+    public record CodeRequest(String code, @JsonProperty("recovery_code") String recoveryCode) {
+    }
+
+    public record DisableMfaRequest(String password, String code, @JsonProperty("recovery_code") String recoveryCode) {
+    }
+
+    public record ProfileRequest(@JsonProperty("display_name") String displayName) {
+    }
+
     public record ValidateRequest(@JsonProperty("session_token") String sessionToken,
             @JsonProperty("csrf_token") String csrfToken) {
     }
@@ -50,11 +64,20 @@ public class AuthController {
     private final AuthService auth;
     private final AuthProperties props;
     private final InternalTokenVerifier verifier;
+    private final MfaService mfa;
 
-    public AuthController(AuthService auth, AuthProperties props, InternalTokenVerifier verifier) {
+    public AuthController(AuthService auth, AuthProperties props, InternalTokenVerifier verifier, MfaService mfa) {
         this.auth = auth;
         this.props = props;
         this.verifier = verifier;
+        this.mfa = mfa;
+    }
+
+    /** A user principal whose session is still live in the database and has completed MFA (if it has MFA). */
+    private InternalPrincipal fullUser(HttpServletRequest request) {
+        InternalPrincipal p = requireUser(request);
+        auth.requireActiveSession(p.sessionId(), false);
+        return p;
     }
 
     private static InternalPrincipal principal(HttpServletRequest request) {
@@ -101,6 +124,7 @@ public class AuthController {
         body.put("user", userBody(issued.user()));
         body.put("csrf_token", issued.csrfToken());
         body.put("expires_at", issued.absoluteExpiresAt());
+        body.put("mfa_required", issued.mfaRequired());
         return ResponseEntity.status(status)
                 .header(HttpHeaders.SET_COOKIE, sessionCookie(issued.token(), props.getAbsoluteTimeout()))
                 .body(body);
@@ -131,10 +155,10 @@ public class AuthController {
     @PostMapping("/v1/auth/password/change")
     public ResponseEntity<Map<String, Object>> changePassword(@RequestBody(required = false) ChangePasswordRequest body,
             HttpServletRequest request) {
-        InternalPrincipal p = requireUser(request);
+        InternalPrincipal p = fullUser(request);
         ChangePasswordRequest r = required(body);
         return sessionResponse(HttpStatus.OK,
-                auth.changePassword(UUID.fromString(p.subject()), r.currentPassword(), r.newPassword()));
+                auth.changePassword(UUID.fromString(p.subject()), p.sessionId(), r.currentPassword(), r.newPassword()));
     }
 
     @PostMapping("/v1/auth/password-reset/request")
@@ -153,10 +177,59 @@ public class AuthController {
 
     @GetMapping("/v1/me")
     public Map<String, Object> me(HttpServletRequest request) {
-        InternalPrincipal p = requireUser(request);
+        InternalPrincipal p = fullUser(request);
         Map<String, Object> body = userBody(auth.profile(UUID.fromString(p.subject())));
         body.put("csrf_token", auth.csrfTokenFor(p.sessionId()));
+        body.put("mfa_enabled", auth.mfaEnabled(UUID.fromString(p.subject())));
         return body;
+    }
+
+    @PatchMapping("/v1/me")
+    public Map<String, Object> updateProfile(@RequestBody(required = false) ProfileRequest body, HttpServletRequest request) {
+        InternalPrincipal p = fullUser(request);
+        Map<String, Object> out = userBody(auth.updateDisplayName(UUID.fromString(p.subject()), required(body).displayName()));
+        out.put("csrf_token", auth.csrfTokenFor(p.sessionId()));
+        out.put("mfa_enabled", auth.mfaEnabled(UUID.fromString(p.subject())));
+        return out;
+    }
+
+    @PostMapping("/v1/auth/step-up")
+    public Map<String, Object> stepUp(@RequestBody(required = false) StepUpRequest body, HttpServletRequest request) {
+        InternalPrincipal p = fullUser(request);
+        StepUpRequest r = required(body);
+        OffsetDateTime until = mfa.stepUp(UUID.fromString(p.subject()), p.sessionId(), r.password(), r.code(), r.recoveryCode());
+        return Map.of("step_up_until", until);
+    }
+
+    @PostMapping("/v1/auth/mfa/enroll")
+    public Map<String, Object> enrollMfa(HttpServletRequest request) {
+        InternalPrincipal p = fullUser(request);
+        MfaService.Enrollment e = mfa.enroll(UUID.fromString(p.subject()));
+        return Map.of("secret", e.secret(), "otpauth_uri", e.otpauthUri());
+    }
+
+    @PostMapping("/v1/auth/mfa/confirm")
+    public ResponseEntity<Map<String, Object>> confirmMfa(@RequestBody(required = false) CodeRequest body, HttpServletRequest request) {
+        InternalPrincipal p = fullUser(request);
+        MfaService.Enabled enabled = mfa.confirm(UUID.fromString(p.subject()), required(body).code());
+        ResponseEntity<Map<String, Object>> base = sessionResponse(HttpStatus.OK, enabled.session());
+        Map<String, Object> out = new LinkedHashMap<>(base.getBody());
+        out.put("recovery_codes", enabled.recoveryCodes());
+        return ResponseEntity.ok().headers(base.getHeaders()).body(out);
+    }
+
+    @PostMapping("/v1/auth/mfa/verify")
+    public ResponseEntity<Map<String, Object>> verifyMfa(@RequestBody(required = false) CodeRequest body, HttpServletRequest request) {
+        InternalPrincipal p = requireUser(request);
+        CodeRequest r = required(body);
+        return sessionResponse(HttpStatus.OK, mfa.verify(UUID.fromString(p.subject()), p.sessionId(), r.code(), r.recoveryCode()));
+    }
+
+    @PostMapping("/v1/auth/mfa/disable")
+    public ResponseEntity<Map<String, Object>> disableMfa(@RequestBody(required = false) DisableMfaRequest body, HttpServletRequest request) {
+        InternalPrincipal p = fullUser(request);
+        DisableMfaRequest r = required(body);
+        return sessionResponse(HttpStatus.OK, mfa.disable(UUID.fromString(p.subject()), r.password(), r.code(), r.recoveryCode()));
     }
 
     /** Gateway-only: resolves a browser session token to a user. The token travels in the body, never in a URL or log. */
@@ -174,6 +247,15 @@ public class AuthController {
             out.put("user_id", v.userId());
             out.put("session_id", v.sessionId());
             out.put("csrf_valid", v.csrfValid());
+            out.put("mfa_pending", v.mfaPending());
+            out.put("step_up_until", v.stepUpUntil() == null ? null : v.stepUpUntil().toInstant().toString());
+            out.put("memberships", v.memberships().stream().map(m -> {
+                Map<String, Object> o = new LinkedHashMap<>();
+                o.put("workspace_id", m.workspaceId());
+                o.put("membership_id", m.membershipId());
+                o.put("role", m.role());
+                return o;
+            }).toList());
         }
         return out;
     }

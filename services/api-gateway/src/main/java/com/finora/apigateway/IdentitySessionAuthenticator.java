@@ -10,6 +10,8 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -72,10 +74,16 @@ public class IdentitySessionAuthenticator implements SessionAuthenticator {
             return Optional.empty();
         }
         try {
+            Instant stepUp = node.path("step_up_until").isString() ? Instant.parse(node.path("step_up_until").asString()) : null;
+            Map<UUID, SessionIdentity.SpaceMembership> memberships = new LinkedHashMap<>();
+            for (JsonNode m : node.path("memberships")) {
+                memberships.put(UUID.fromString(m.path("workspace_id").asString()), new SessionIdentity.SpaceMembership(
+                        UUID.fromString(m.path("membership_id").asString()), m.path("role").asString(), List.of(), stepUp));
+            }
             return Optional.of(new SessionIdentity(UUID.fromString(node.path("user_id").asString()),
-                    UUID.fromString(node.path("session_id").asString()), Map.of(),
-                    node.path("csrf_valid").asBoolean(false)));
-        } catch (IllegalArgumentException e) {
+                    UUID.fromString(node.path("session_id").asString()), Map.copyOf(memberships),
+                    node.path("csrf_valid").asBoolean(false), node.path("mfa_pending").asBoolean(false)));
+        } catch (IllegalArgumentException | java.time.format.DateTimeParseException e) {
             throw new DownstreamFailure(DownstreamFailure.Kind.BAD_RESPONSE, "malformed session validation response", e);
         }
     }

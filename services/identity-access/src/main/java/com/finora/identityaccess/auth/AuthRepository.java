@@ -15,7 +15,11 @@ class AuthRepository {
     }
 
     record SessionRow(UUID id, UUID userId, String csrfToken, OffsetDateTime lastSeenAt,
-            OffsetDateTime absoluteExpiresAt, OffsetDateTime revokedAt, String userStatus) {
+            OffsetDateTime absoluteExpiresAt, OffsetDateTime revokedAt, String userStatus, boolean mfaPending,
+            OffsetDateTime mfaVerifiedAt, OffsetDateTime stepUpUntil) {
+    }
+
+    record MembershipRow(UUID workspaceId, UUID membershipId, String role) {
     }
 
     record ThrottleRow(int failureCount, OffsetDateTime lastFailureAt, OffsetDateTime lockedUntil) {
@@ -62,18 +66,20 @@ class AuthRepository {
     // ---- sessions ----
 
     void insertSession(UUID id, UUID userId, byte[] tokenHash, String csrf, OffsetDateTime now,
-            OffsetDateTime absoluteExpiresAt) {
+            OffsetDateTime absoluteExpiresAt, boolean mfaPending, OffsetDateTime mfaVerifiedAt) {
         jdbc.sql("""
-                insert into sessions (id, user_id, token_hash, csrf_token, created_at, last_seen_at, absolute_expires_at)
-                values (:id, :uid, :th, :csrf, :now, :now, :abs)
+                insert into sessions (id, user_id, token_hash, csrf_token, created_at, last_seen_at, absolute_expires_at,
+                                      mfa_pending, mfa_verified_at)
+                values (:id, :uid, :th, :csrf, :now, :now, :abs, :pending, :verified)
                 """)
                 .param("id", id).param("uid", userId).param("th", tokenHash).param("csrf", csrf).param("now", now)
-                .param("abs", absoluteExpiresAt).update();
+                .param("abs", absoluteExpiresAt).param("pending", mfaPending).param("verified", mfaVerifiedAt).update();
     }
 
     Optional<SessionRow> findSessionByHash(byte[] tokenHash) {
         return jdbc.sql("""
-                select s.id, s.user_id, s.csrf_token, s.last_seen_at, s.absolute_expires_at, s.revoked_at, u.status
+                select s.id, s.user_id, s.csrf_token, s.last_seen_at, s.absolute_expires_at, s.revoked_at, u.status,
+                       s.mfa_pending, s.mfa_verified_at, s.step_up_until
                 from sessions s join users u on u.id = s.user_id where s.token_hash = :th
                 """)
                 .param("th", tokenHash).query(this::mapSession).optional();
@@ -81,7 +87,8 @@ class AuthRepository {
 
     Optional<SessionRow> findSessionById(UUID id) {
         return jdbc.sql("""
-                select s.id, s.user_id, s.csrf_token, s.last_seen_at, s.absolute_expires_at, s.revoked_at, u.status
+                select s.id, s.user_id, s.csrf_token, s.last_seen_at, s.absolute_expires_at, s.revoked_at, u.status,
+                       s.mfa_pending, s.mfa_verified_at, s.step_up_until
                 from sessions s join users u on u.id = s.user_id where s.id = :id
                 """)
                 .param("id", id).query(this::mapSession).optional();
@@ -90,7 +97,8 @@ class AuthRepository {
     private SessionRow mapSession(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
         return new SessionRow(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3),
                 rs.getObject(4, OffsetDateTime.class), rs.getObject(5, OffsetDateTime.class),
-                rs.getObject(6, OffsetDateTime.class), rs.getString(7));
+                rs.getObject(6, OffsetDateTime.class), rs.getString(7), rs.getBoolean(8),
+                rs.getObject(9, OffsetDateTime.class), rs.getObject(10, OffsetDateTime.class));
     }
 
     void touchSession(UUID id, OffsetDateTime now) {
@@ -106,6 +114,39 @@ class AuthRepository {
     int revokeAllSessions(UUID userId, String reason, OffsetDateTime now) {
         return jdbc.sql("update sessions set revoked_at = :now, revoke_reason = :r where user_id = :uid and revoked_at is null")
                 .param("now", now).param("r", reason).param("uid", userId).update();
+    }
+
+    void setStepUp(UUID sessionId, OffsetDateTime until) {
+        jdbc.sql("update sessions set step_up_until = :u where id = :id and revoked_at is null")
+                .param("u", until).param("id", sessionId).update();
+    }
+
+    boolean hasConfirmedMfa(UUID userId) {
+        return jdbc.sql("select count(*) from mfa_factors where user_id = :u and confirmed_at is not null")
+                .param("u", userId).query(Long.class).single() > 0;
+    }
+
+    /** Active memberships in active workspaces: what the gateway may mint workspace-scoped tokens for. */
+    java.util.List<MembershipRow> activeMemberships(UUID userId) {
+        return jdbc.sql("""
+                select m.workspace_id, m.id, m.role from memberships m join workspaces w on w.id = m.workspace_id
+                where m.user_id = :u and m.status = 'ACTIVE' and w.status = 'ACTIVE' order by m.created_at
+                """)
+                .param("u", userId)
+                .query((rs, n) -> new MembershipRow(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3)))
+                .list();
+    }
+
+    void insertPersonalWorkspace(UUID workspaceId, UUID membershipId, UUID userId, OffsetDateTime now) {
+        jdbc.sql("insert into workspaces (id, name, type, status, created_by, created_at, updated_at) values (:w, 'Personal', 'PERSONAL', 'ACTIVE', :u, :now, :now)")
+                .param("w", workspaceId).param("u", userId).param("now", now).update();
+        jdbc.sql("insert into memberships (id, workspace_id, user_id, role, status, created_at, updated_at) values (:m, :w, :u, 'OWNER', 'ACTIVE', :now, :now)")
+                .param("m", membershipId).param("w", workspaceId).param("u", userId).param("now", now).update();
+    }
+
+    void updateDisplayName(UUID userId, String name, OffsetDateTime now) {
+        jdbc.sql("update users set display_name = :n, updated_at = :now where id = :id")
+                .param("n", name).param("now", now).param("id", userId).update();
     }
 
     // ---- throttle ----
@@ -140,6 +181,64 @@ class AuthRepository {
         jdbc.sql("delete from auth_throttle where key_hash = :k").param("k", key).update();
     }
 
+    // ---- MFA ----
+
+    record FactorRow(byte[] secretCiphertext, OffsetDateTime confirmedAt, long lastUsedStep) {
+    }
+
+    void upsertUnconfirmedFactor(UUID userId, byte[] cipher, OffsetDateTime now) {
+        jdbc.sql("""
+                insert into mfa_factors (user_id, secret_ciphertext, created_at) values (:u, :c, :now)
+                on conflict (user_id) do update set secret_ciphertext = :c, created_at = :now, last_used_step = 0
+                where mfa_factors.confirmed_at is null
+                """)
+                .param("u", userId).param("c", cipher).param("now", now).update();
+    }
+
+    Optional<FactorRow> findFactor(UUID userId) {
+        return jdbc.sql("select secret_ciphertext, confirmed_at, last_used_step from mfa_factors where user_id = :u")
+                .param("u", userId)
+                .query((rs, n) -> new FactorRow(rs.getBytes(1), rs.getObject(2, OffsetDateTime.class), rs.getLong(3)))
+                .optional();
+    }
+
+    void confirmFactor(UUID userId, long step, OffsetDateTime now) {
+        jdbc.sql("update mfa_factors set confirmed_at = :now, last_used_step = :s where user_id = :u")
+                .param("now", now).param("s", step).param("u", userId).update();
+    }
+
+    /** Atomic replay protection: a time step can be used once. */
+    boolean advanceLastUsedStep(UUID userId, long step) {
+        return jdbc.sql("update mfa_factors set last_used_step = :s where user_id = :u and last_used_step < :s")
+                .param("s", step).param("u", userId).update() == 1;
+    }
+
+    void deleteFactor(UUID userId) {
+        jdbc.sql("delete from mfa_factors where user_id = :u").param("u", userId).update();
+        jdbc.sql("delete from mfa_recovery_codes where user_id = :u").param("u", userId).update();
+    }
+
+    void insertRecoveryCode(UUID userId, byte[] hash, OffsetDateTime now) {
+        jdbc.sql("insert into mfa_recovery_codes (id, user_id, code_hash, created_at) values (:id, :u, :h, :now)")
+                .param("id", UUID.randomUUID()).param("u", userId).param("h", hash).param("now", now).update();
+    }
+
+    void deleteRecoveryCodes(UUID userId) {
+        jdbc.sql("delete from mfa_recovery_codes where user_id = :u").param("u", userId).update();
+    }
+
+    boolean consumeRecoveryCode(UUID userId, byte[] hash, OffsetDateTime now) {
+        return jdbc.sql("update mfa_recovery_codes set used_at = :now where user_id = :u and code_hash = :h and used_at is null")
+                .param("now", now).param("u", userId).param("h", hash).update() == 1;
+    }
+
+    boolean hasPrivilegedBusinessRole(UUID userId) {
+        return jdbc.sql("""
+                select count(*) from memberships m join workspaces w on w.id = m.workspace_id
+                where m.user_id = :u and m.status = 'ACTIVE' and w.type = 'BUSINESS' and m.role in ('OWNER', 'ADMIN')
+                """).param("u", userId).query(Long.class).single() > 0;
+    }
+
     // ---- password reset ----
 
     void insertResetToken(UUID id, UUID userId, byte[] hash, OffsetDateTime now, OffsetDateTime expires) {
@@ -167,6 +266,19 @@ class AuthRepository {
     Optional<UUID> consumeResetToken(byte[] hash, OffsetDateTime now) {
         return jdbc.sql("update password_reset_tokens set used_at = :now where token_hash = :h and used_at is null and expires_at > :now returning user_id")
                 .param("h", hash).param("now", now).query((rs, n) -> rs.getObject(1, UUID.class)).optional();
+    }
+
+    // ---- security audit log (append-only; PD-15 architecture still pending) ----
+
+    void insertAudit(UUID workspaceId, UUID actor, String type, String targetType, String targetId, String outcome,
+            String detail, String requestId, OffsetDateTime now) {
+        jdbc.sql("""
+                insert into security_audit_events (id, workspace_id, actor_user_id, event_type, target_type, target_id, outcome, detail, request_id, created_at)
+                values (:id, :w, :a, :t, :tt, :ti, :o, :d, :r, :now)
+                """)
+                .param("id", UUID.randomUUID()).param("w", workspaceId).param("a", actor).param("t", type)
+                .param("tt", targetType).param("ti", targetId).param("o", outcome).param("d", detail)
+                .param("r", requestId).param("now", now).update();
     }
 
     // ---- events ----

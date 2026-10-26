@@ -25,6 +25,6 @@ class HeaderTestSessionAuthenticator implements SessionAuthenticator {
         }
         return Optional.of(new SessionIdentity(USER, SESSION, Map.of(SPACE,
                 new SessionIdentity.SpaceMembership(MEMBERSHIP, "OWNER", List.of("finance:read"), Instant.EPOCH)),
-                true));
+                true, false));
     }
 }

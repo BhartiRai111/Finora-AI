@@ -8,10 +8,11 @@ import java.util.UUID;
 /**
  * Who the browser session belongs to, as established by the session authority (identity-access). The gateway never
  * trusts a client-supplied identity or role; it only translates this into a short-lived internal token.
+ * {@code mfaPending} marks a session that still has to complete its second factor: it may reach nothing else.
  * {@code csrfValid} says whether the request carried the CSRF token bound to this session.
  */
 public record SessionIdentity(UUID userId, UUID sessionId, Map<UUID, SpaceMembership> memberships,
-        boolean csrfValid) {
+        boolean csrfValid, boolean mfaPending) {
 
     public record SpaceMembership(UUID membershipId, String role, List<String> scopes, Instant stepUpUntil) {
     }

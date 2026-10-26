@@ -47,6 +47,7 @@ public class GatewayProxyFilter extends OncePerRequestFilter {
             "if-none-match", "idempotency-key", "user-agent");
     private static final Set<String> RESPONSE_HEADERS = Set.of("content-type", "etag", "location", "retry-after",
             "content-disposition", "idempotency-replayed", "deprecation", "sunset", "link", "content-language");
+    private static final Set<String> MFA_PENDING_ALLOWED = Set.of("/v1/auth/mfa/verify", "/v1/auth/logout");
     private static final Pattern SPACE_PATH = Pattern.compile("^/v1/spaces/([^/]+)(/.*)?$");
     private static final Pattern BAD_PATH = Pattern.compile("(?i)(%2e|%2f|%5c|%00|%25|\\\\|;|\\.\\.|//|[\\x00-\\x1f\\x7f])");
     private static final Pattern IDEMPOTENCY_KEY = Pattern.compile("^[\\x21-\\x7e]{1,128}$");
@@ -142,6 +143,11 @@ public class GatewayProxyFilter extends OncePerRequestFilter {
             return;
         }
 
+        if (identity.isPresent() && identity.get().mfaPending() && !MFA_PENDING_ALLOWED.contains(rawPath)) {
+            // Password accepted but second factor outstanding: this session can complete MFA or log out, nothing else.
+            problems.write(request, response, ErrorCode.MFA_REQUIRED, "Complete multi-factor authentication first", null);
+            return;
+        }
         if (mutating && identity.isPresent() && route.access() == Route.Access.SESSION_REQUIRED
                 && !identity.get().csrfValid()) {
             problems.write(request, response, ErrorCode.CSRF_INVALID, null, null);

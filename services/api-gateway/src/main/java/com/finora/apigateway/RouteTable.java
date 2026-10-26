@@ -57,7 +57,14 @@ public final class RouteTable {
         // Session-bound operations: a session (and, for POST, the CSRF token) is mandatory; both manage the session cookie.
         r.add(Route.of("/v1/auth/logout", "identity-access", Route.Access.SESSION_REQUIRED).withCookies());
         r.add(Route.of("/v1/auth/password/change", "identity-access", Route.Access.SESSION_REQUIRED).withCookies());
-        r.add(Route.of("/v1/invitations/accept", "identity-access", Route.Access.SESSION_OPTIONAL).withStrictRate());
+        r.add(Route.of("/v1/auth/step-up", "identity-access", Route.Access.SESSION_REQUIRED).withStrictRate());
+        for (String mfa : List.of("enroll", "confirm", "verify", "disable")) {
+            r.add(Route.of("/v1/auth/mfa/" + mfa, "identity-access", Route.Access.SESSION_REQUIRED).withCookies().withStrictRate());
+        }
+        // Accepting or declining needs a signed-in user (and therefore a CSRF token).
+        r.add(Route.of("/v1/invitations/accept", "identity-access", Route.Access.SESSION_REQUIRED).withStrictRate());
+        r.add(Route.of("/v1/invitations/decline", "identity-access", Route.Access.SESSION_REQUIRED).withStrictRate());
+        r.add(Route.of("/v1/spaces/{space}", "identity-access", Route.Access.SESSION_REQUIRED));
         r.add(Route.of("/v1/me", "identity-access", Route.Access.SESSION_REQUIRED));
         r.add(Route.of("/v1/me/notification-preferences", "platform", Route.Access.SESSION_REQUIRED));
         r.add(Route.of("/v1/me/**", "identity-access", Route.Access.SESSION_REQUIRED));

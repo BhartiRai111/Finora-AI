@@ -48,6 +48,31 @@ class RouteTableTest {
     }
 
     @Test
+    void identityAndWorkspaceRoutesGoToIdentityAccess() {
+        assertThat(owner("/v1/workspaces")).isEqualTo("identity-access");
+        assertThat(owner(s)).isEqualTo("identity-access");
+        assertThat(owner(s + "/members/42")).isEqualTo("identity-access");
+        assertThat(owner(s + "/invitations")).isEqualTo("identity-access");
+        assertThat(owner(s + "/ownership-transfers")).isEqualTo("identity-access");
+        assertThat(owner("/v1/invitations/accept")).isEqualTo("identity-access");
+        assertThat(owner("/v1/invitations/decline")).isEqualTo("identity-access");
+        assertThat(owner("/v1/auth/mfa/verify")).isEqualTo("identity-access");
+        assertThat(owner("/v1/auth/step-up")).isEqualTo("identity-access");
+    }
+
+    @Test
+    void sessionBoundAuthRoutesRequireASession() {
+        for (String path : new String[] {"/v1/auth/logout", "/v1/auth/password/change", "/v1/auth/step-up", "/v1/auth/mfa/enroll",
+                "/v1/auth/mfa/confirm", "/v1/auth/mfa/verify", "/v1/auth/mfa/disable", "/v1/invitations/accept", "/v1/invitations/decline",
+                "/v1/workspaces", "/v1/me"}) {
+            assertThat(table.match(path).orElseThrow().access()).as(path).isEqualTo(Route.Access.SESSION_REQUIRED);
+        }
+        for (String path : new String[] {"/v1/auth/login", "/v1/auth/register", "/v1/auth/password-reset/request", "/v1/auth/password-reset/confirm"}) {
+            assertThat(table.match(path).orElseThrow().access()).as(path).isEqualTo(Route.Access.SESSION_OPTIONAL);
+        }
+    }
+
+    @Test
     void webhooksRouteByProviderKind() {
         assertThat(owner("/v1/webhooks/billing/acme")).isEqualTo("platform");
         assertThat(owner("/v1/webhooks/acme")).isEqualTo("ingestion-integration");

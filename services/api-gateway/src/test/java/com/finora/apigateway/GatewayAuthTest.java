@@ -40,6 +40,8 @@ class GatewayAuthTest {
     private static final String COOKIE = "__Host-finora_sid";
     private static final UUID USER = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
     private static final UUID SESSION = UUID.fromString("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+    private static final UUID WORKSPACE = UUID.fromString("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+    private static final UUID MEMBERSHIP = UUID.fromString("dddddddd-dddd-4ddd-8ddd-dddddddddddd");
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
 
     @DynamicPropertySource
@@ -61,10 +63,17 @@ class GatewayAuthTest {
                 return Reply.json(200, "{}");
             }
             boolean good = r.body().contains("\"session_token\":\"good\"");
+            boolean member = r.body().contains("\"session_token\":\"member\"");
+            boolean pending = r.body().contains("\"session_token\":\"pending\"");
             boolean csrf = r.body().contains("\"csrf_token\":\"csrf-1\"");
-            return Reply.json(200, good
-                    ? "{\"valid\":true,\"user_id\":\"" + USER + "\",\"session_id\":\"" + SESSION + "\",\"csrf_valid\":" + csrf + "}"
-                    : "{\"valid\":false}");
+            if (!good && !member && !pending) {
+                return Reply.json(200, "{\"valid\":false}");
+            }
+            String memberships = member ? "[{\"workspace_id\":\"" + WORKSPACE + "\",\"membership_id\":\"" + MEMBERSHIP
+                    + "\",\"role\":\"ADMIN\"}]" : "[]";
+            String stepUp = member ? ",\"step_up_until\":\"" + java.time.Instant.now().plusSeconds(300) + "\"" : "";
+            return Reply.json(200, "{\"valid\":true,\"user_id\":\"" + USER + "\",\"session_id\":\"" + SESSION
+                    + "\",\"csrf_valid\":" + csrf + ",\"mfa_pending\":" + pending + stepUp + ",\"memberships\":" + memberships + "}");
         });
     }
 
@@ -242,5 +251,65 @@ class GatewayAuthTest {
         assertThat(call("POST", "/internal/v1/sessions/validate", h("Content-Type", "application/json"), "{\"session_token\":\"good\"}").statusCode())
                 .isEqualTo(404);
         assertThat(Stubs.get("identity-access").callCount()).isZero();
+    }
+
+    // ---- workspaces and MFA through the gateway ----
+
+    @Test
+    void workspaceTokensCarryTheMembershipTheSessionAuthorityReported() throws Exception {
+        HttpResponse<String> r = call("GET", "/v1/spaces/" + WORKSPACE + "/members", h("Cookie", COOKIE + "=member"), null);
+        assertThat(r.statusCode()).isEqualTo(200);
+        StubServer.Received forwarded = Stubs.get("identity-access").received().get(1);
+        assertThat(forwarded.path()).isEqualTo("/v1/spaces/" + WORKSPACE + "/members");
+        InternalPrincipal p = verify(forwarded.headers().get("Authorization"), "identity-access");
+        assertThat(p.tenantId()).isEqualTo(WORKSPACE);
+        assertThat(p.membershipId()).isEqualTo(MEMBERSHIP);
+        assertThat(p.role()).isEqualTo("ADMIN");
+        assertThat(p.stepUpUntil()).isNotNull();
+    }
+
+    @Test
+    void aWorkspaceTheSessionHasNoMembershipInIsNeverForwarded() throws Exception {
+        UUID other = UUID.randomUUID();
+        assertThat(call("GET", "/v1/spaces/" + other + "/members", h("Cookie", COOKIE + "=member"), null).statusCode()).isEqualTo(404);
+        assertThat(call("GET", "/v1/spaces/" + other + "/transactions", h("Cookie", COOKIE + "=member", "X-Tenant-Id", WORKSPACE.toString()), null).statusCode()).isEqualTo(404);
+        assertThat(Stubs.get("identity-access").received()).noneMatch(rq -> rq.path().contains(other.toString()));
+        assertThat(Stubs.get("finance").callCount()).isZero();
+    }
+
+    @Test
+    void aSessionWaitingForMfaReachesOnlyMfaVerificationAndLogout() throws Exception {
+        Map<String, String> pending = h("Cookie", COOKIE + "=pending", "X-CSRF-Token", "csrf-1", "Content-Type", "application/json");
+        for (String path : new String[] {"/v1/me", "/v1/workspaces", "/v1/spaces/" + WORKSPACE + "/members", "/v1/auth/step-up"}) {
+            HttpResponse<String> r = call(path.equals("/v1/auth/step-up") ? "POST" : "GET", path, pending, path.equals("/v1/auth/step-up") ? "{}" : null);
+            assertThat(r.statusCode()).as(path).isEqualTo(403);
+            assertThat(r.body()).contains("MFA_REQUIRED");
+        }
+        assertThat(Stubs.get("identity-access").received()).noneMatch(rq -> !rq.path().equals("/internal/v1/sessions/validate"));
+        assertThat(call("POST", "/v1/auth/mfa/verify", pending, "{\"code\":\"123456\"}").statusCode()).isEqualTo(200);
+        assertThat(call("POST", "/v1/auth/logout", pending, "{}").statusCode()).isEqualTo(200);
+    }
+
+    @Test
+    void invitationAcceptanceAndDeclineNeedASessionAndCsrf() throws Exception {
+        for (String path : new String[] {"/v1/invitations/accept", "/v1/invitations/decline"}) {
+            assertThat(call("POST", path, h("Content-Type", "application/json"), "{\"token\":\"x\"}").statusCode()).as(path).isEqualTo(401);
+            assertThat(call("POST", path, h("Cookie", COOKIE + "=good", "Content-Type", "application/json"), "{\"token\":\"x\"}").statusCode())
+                    .as(path + " without CSRF").isEqualTo(403);
+            assertThat(call("POST", path, h("Cookie", COOKIE + "=good", "X-CSRF-Token", "csrf-1", "Content-Type", "application/json"), "{\"token\":\"x\"}").statusCode())
+                    .as(path).isEqualTo(200);
+        }
+    }
+
+    @Test
+    void workspaceChangesRequireCsrfOnEveryStateChangingMethod() throws Exception {
+        Map<String, String> noCsrf = h("Cookie", COOKIE + "=member", "Content-Type", "application/json");
+        String base = "/v1/spaces/" + WORKSPACE;
+        assertThat(call("PATCH", base, noCsrf, "{\"name\":\"x\"}").statusCode()).isEqualTo(403);
+        assertThat(call("DELETE", base + "/members/" + MEMBERSHIP, noCsrf, null).statusCode()).isEqualTo(403);
+        assertThat(call("POST", base + "/invitations", noCsrf, "{}").statusCode()).isEqualTo(403);
+        assertThat(call("POST", base + "/ownership-transfers", noCsrf, "{}").statusCode()).isEqualTo(403);
+        assertThat(call("POST", "/v1/workspaces", noCsrf, "{}").statusCode()).isEqualTo(403);
+        assertThat(Stubs.get("identity-access").received()).noneMatch(rq -> !rq.path().equals("/internal/v1/sessions/validate"));
     }
 }

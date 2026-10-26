@@ -1,0 +1,24 @@
+# Secrets and local configuration (never commit real values)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.local/
+
+# Build output
+target/
+.next/
+out/
+node_modules/
+*.tsbuildinfo
+next-env.d.ts
+coverage/
+dist/
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log

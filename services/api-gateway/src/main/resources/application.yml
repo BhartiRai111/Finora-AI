@@ -1,0 +1,32 @@
+# api-gateway service configuration. Defaults are for local development only.
+# Secrets are never stored here: passwords come from the environment (see .env.example).
+spring:
+  application:
+    name: api-gateway
+
+server:
+  # Services are private by default: loopback only. Exposure beyond localhost needs an approved deployment decision.
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${SERVER_PORT:8080}
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-binding-errors: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      show-components: never
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState

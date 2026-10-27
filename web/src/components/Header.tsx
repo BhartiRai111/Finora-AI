@@ -58,6 +58,7 @@ export function Header() {
               </select>
             </>
           )}
+          <Link href="/finance">Finance</Link>
           <Link href="/workspaces">Workspaces</Link>
           <Link href="/account">Account</Link>
           <button type="button" className="link" onClick={() => void logout()}>

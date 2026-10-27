@@ -19,7 +19,7 @@ class AuthRepository {
             OffsetDateTime mfaVerifiedAt, OffsetDateTime stepUpUntil) {
     }
 
-    record MembershipRow(UUID workspaceId, UUID membershipId, String role) {
+    record MembershipRow(UUID workspaceId, UUID membershipId, String role, String workspaceType) {
     }
 
     record ThrottleRow(int failureCount, OffsetDateTime lastFailureAt, OffsetDateTime lockedUntil) {
@@ -129,11 +129,11 @@ class AuthRepository {
     /** Active memberships in active workspaces: what the gateway may mint workspace-scoped tokens for. */
     java.util.List<MembershipRow> activeMemberships(UUID userId) {
         return jdbc.sql("""
-                select m.workspace_id, m.id, m.role from memberships m join workspaces w on w.id = m.workspace_id
+                select m.workspace_id, m.id, m.role, w.type from memberships m join workspaces w on w.id = m.workspace_id
                 where m.user_id = :u and m.status = 'ACTIVE' and w.status = 'ACTIVE' order by m.created_at
                 """)
                 .param("u", userId)
-                .query((rs, n) -> new MembershipRow(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3)))
+                .query((rs, n) -> new MembershipRow(rs.getObject(1, UUID.class), rs.getObject(2, UUID.class), rs.getString(3), rs.getString(4)))
                 .list();
     }
 

@@ -37,6 +37,7 @@ abstract class E2eBase {
 
     static Process gateway;
     static Process identity;
+    static Process finance;
     static Path logDir;
     static Path devOutbox;
     static int gatewayPort;
@@ -49,6 +50,7 @@ abstract class E2eBase {
         Path root = findRoot();
         Path gatewayJar = jar(root, "api-gateway");
         Path identityJar = jar(root, "identity-access");
+        Path financeJar = jar(root, "finance");
         logDir = Files.createTempDirectory("finora-e2e-logs");
         devOutbox = logDir.resolve("invitations.jsonl");
         Path mfaKey = logDir.resolve("mfa.key");
@@ -58,6 +60,7 @@ abstract class E2eBase {
         Path keys = TestKeys.exportPair(TestTokens.GATEWAY);
         gatewayPort = freePort();
         int identityPort = freePort();
+        int financePort = freePort();
         Map<String, String> common = Map.of("FINORA_KEYS_DIR", keys.toString(), "FINORA_COOKIE_SECURE", "true");
 
         Map<String, String> identityEnv = new LinkedHashMap<>(common);
@@ -68,7 +71,13 @@ abstract class E2eBase {
         identityEnv.put("FINORA_INVITATIONS_DEV_OUTBOX_FILE", devOutbox.toString());
         identity = launch(identityJar, identityEnv, logDir.resolve("identity-access.log"));
 
+        Map<String, String> financeEnv = new LinkedHashMap<>(common);
+        financeEnv.put("SERVER_PORT", String.valueOf(financePort));
+        financeEnv.put("FINORA_FINANCE_RECURRING_SCHEDULER_ENABLED", "false");
+        finance = launch(financeJar, financeEnv, logDir.resolve("finance.log"));
+
         Map<String, String> gatewayEnv = new LinkedHashMap<>(common);
+        gatewayEnv.put("FINANCE_URL", "http://127.0.0.1:" + financePort);
         gatewayEnv.put("SERVER_PORT", String.valueOf(gatewayPort));
         gatewayEnv.put("IDENTITY_ACCESS_URL", "http://127.0.0.1:" + identityPort);
         gatewayEnv.put("FINORA_GATEWAY_AUTH_CAPACITY", "500");
@@ -76,13 +85,14 @@ abstract class E2eBase {
         gateway = launch(gatewayJar, gatewayEnv, logDir.resolve("api-gateway.log"));
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            for (Process p : new Process[] {gateway, identity}) {
+            for (Process p : new Process[] {gateway, identity, finance}) {
                 if (p != null) {
                     p.destroy();
                 }
             }
         }));
         awaitReady(identityPort);
+        awaitReady(financePort);
         awaitReady(gatewayPort);
     }
 

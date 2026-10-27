@@ -24,6 +24,11 @@ class RouteTableTest {
         assertThat(owner(s + "/transactions")).isEqualTo("finance");
         assertThat(owner(s + "/transactions/abc/tags")).isEqualTo("finance");
         assertThat(owner(s + "/invoices/9")).isEqualTo("finance");
+        for (String segment : new String[] {"accounts", "transactions", "transfers", "categories", "tags", "recurring-rules", "budgets", "goals",
+                "subscriptions", "bills", "net-worth", "net-worth/series", "summaries/cashflow", "finance-settings", "transactions/1/void",
+                "bills/1/pay", "recurring-rules/run", "categories/starter"}) {
+            assertThat(owner(s + "/" + segment)).as(segment).isEqualTo("finance");
+        }
         assertThat(owner(s + "/documents/1")).isEqualTo("document");
         assertThat(owner(s + "/imports")).isEqualTo("ingestion-integration");
         assertThat(owner(s + "/reports/monthly")).isEqualTo("reporting");

@@ -70,7 +70,7 @@ class GatewayAuthTest {
                 return Reply.json(200, "{\"valid\":false}");
             }
             String memberships = member ? "[{\"workspace_id\":\"" + WORKSPACE + "\",\"membership_id\":\"" + MEMBERSHIP
-                    + "\",\"role\":\"ADMIN\"}]" : "[]";
+                    + "\",\"role\":\"ADMIN\",\"workspace_type\":\"PERSONAL\"}]" : "[]";
             String stepUp = member ? ",\"step_up_until\":\"" + java.time.Instant.now().plusSeconds(300) + "\"" : "";
             return Reply.json(200, "{\"valid\":true,\"user_id\":\"" + USER + "\",\"session_id\":\"" + SESSION
                     + "\",\"csrf_valid\":" + csrf + ",\"mfa_pending\":" + pending + stepUp + ",\"memberships\":" + memberships + "}");
@@ -266,6 +266,7 @@ class GatewayAuthTest {
         assertThat(p.membershipId()).isEqualTo(MEMBERSHIP);
         assertThat(p.role()).isEqualTo("ADMIN");
         assertThat(p.stepUpUntil()).isNotNull();
+        assertThat(p.scopes()).as("the workspace kind travels as a scope").containsExactly("workspace:personal");
     }
 
     @Test

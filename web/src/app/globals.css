@@ -58,3 +58,11 @@ a { color: inherit; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--muted); }
 .codes { columns: 2; list-style: none; padding: 0; }
+.filters { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin: 0.75rem 0; }
+.column { display: flex; flex-direction: column; gap: 0.25rem; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+.voided { opacity: 0.6; text-decoration: line-through; }
+.status { font-weight: 600; }
+.status-under { color: #1e8449; }
+.status-warning { color: #9a6700; }
+.status-over { color: #c0392b; }

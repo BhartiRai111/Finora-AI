@@ -78,7 +78,10 @@ public class IdentitySessionAuthenticator implements SessionAuthenticator {
             Map<UUID, SessionIdentity.SpaceMembership> memberships = new LinkedHashMap<>();
             for (JsonNode m : node.path("memberships")) {
                 memberships.put(UUID.fromString(m.path("workspace_id").asString()), new SessionIdentity.SpaceMembership(
-                        UUID.fromString(m.path("membership_id").asString()), m.path("role").asString(), List.of(), stepUp));
+                        UUID.fromString(m.path("membership_id").asString()), m.path("role").asString(),
+                        // The workspace kind travels as a scope so services can refuse a space that is not theirs to serve
+                        // (the finance service serves personal profiles only).
+                        List.of("workspace:" + (m.path("workspace_type").isString() ? m.path("workspace_type").asString() : "unknown").toLowerCase(java.util.Locale.ROOT)), stepUp));
             }
             return Optional.of(new SessionIdentity(UUID.fromString(node.path("user_id").asString()),
                     UUID.fromString(node.path("session_id").asString()), Map.copyOf(memberships),

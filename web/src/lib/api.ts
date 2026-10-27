@@ -21,13 +21,20 @@ export function setCsrfToken(token: string | null): void {
   csrfToken = token;
 }
 
-type RequestOptions = { method?: "GET" | "POST" | "PATCH" | "DELETE"; body?: unknown; signal?: AbortSignal };
+type RequestOptions = {
+  method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  body?: unknown;
+  signal?: AbortSignal;
+  /** Makes a retried write safe: the server runs a request with this key at most once. */
+  idempotencyKey?: string;
+};
 
 export async function api<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = options.method ?? "GET";
   const headers: Record<string, string> = { Accept: "application/json" };
   if (options.body !== undefined) headers["Content-Type"] = "application/json";
   if (method !== "GET" && csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  if (options.idempotencyKey) headers["Idempotency-Key"] = options.idempotencyKey;
 
   let response: Response;
   try {
@@ -89,6 +96,8 @@ export function describeError(error: unknown): string {
     case "CONFLICT":
     case "BAD_REQUEST":
       return error.detail ?? "The request could not be completed.";
+    case "IDEMPOTENCY_KEY_REUSED":
+      return "That request was already used for something different. Please try again.";
     case "FEATURE_UNAVAILABLE":
       return error.detail ?? "This feature is not available on this server.";
     default:

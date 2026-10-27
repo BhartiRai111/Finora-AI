@@ -19,7 +19,7 @@ public final class RouteTable {
     private static final Set<String> FINANCE = Set.of("accounts", "transactions", "transfers", "categories", "tags",
             "recurring-rules", "budgets", "goals", "subscriptions", "bills", "clients", "vendors", "projects", "claims",
             "approvals", "approval-policies", "invoices", "adjustments", "payments", "vendor-bills", "invoice-series",
-            "companies");
+            "companies", "net-worth", "finance-settings", "summaries");
 
     private final List<Route> routes;
 

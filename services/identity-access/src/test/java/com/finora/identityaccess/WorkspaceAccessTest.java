@@ -237,6 +237,8 @@ class WorkspaceAccessTest extends IdentityTestSupport {
         List<String> spaces = new ArrayList<>();
         validate.body().path("memberships").forEach(m -> spaces.add(m.path("workspace_id").asString()));
         assertThat(spaces).doesNotContain(t.space.toString());
+        assertThat(validate.body().path("memberships").get(0).path("workspace_type").asString())
+                .as("the kind of workspace is reported so services can refuse the wrong kind").isEqualTo("PERSONAL");
         assertThat(jdbc.sql("select status from memberships where id = :m").param("m", mid).query(String.class).single()).isEqualTo("REMOVED");
     }
 

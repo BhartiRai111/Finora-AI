@@ -37,7 +37,7 @@ public class AuthService {
             User user, boolean mfaRequired) {
     }
 
-    public record Membership(UUID workspaceId, UUID membershipId, String role) {
+    public record Membership(UUID workspaceId, UUID membershipId, String role, String workspaceType) {
     }
 
     public record Validation(boolean valid, UUID userId, UUID sessionId, boolean csrfValid, boolean mfaPending,
@@ -253,7 +253,7 @@ public class AuthService {
                 && Tokens.constantTimeEquals(session.csrfToken(), csrfToken);
         List<Membership> memberships = session.mfaPending() ? List.of()
                 : repo.activeMemberships(session.userId()).stream()
-                        .map(m -> new Membership(m.workspaceId(), m.membershipId(), m.role())).toList();
+                        .map(m -> new Membership(m.workspaceId(), m.membershipId(), m.role(), m.workspaceType())).toList();
         return new Validation(true, session.userId(), session.id(), csrfValid, session.mfaPending(),
                 session.stepUpUntil(), memberships);
     }

@@ -254,6 +254,7 @@ public class AuthController {
                 o.put("workspace_id", m.workspaceId());
                 o.put("membership_id", m.membershipId());
                 o.put("role", m.role());
+                o.put("workspace_type", m.workspaceType());
                 return o;
             }).toList());
         }

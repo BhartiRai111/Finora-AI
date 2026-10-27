@@ -7,13 +7,14 @@ import { Loading, Notice } from "@/components/Notice";
 import { MembersPanel } from "@/components/MembersPanel";
 import { InvitationsPanel } from "@/components/InvitationsPanel";
 import { SettingsPanel } from "@/components/SettingsPanel";
+import { BusinessApp } from "@/components/business/BusinessApp";
 import { api, ApiError, describeError } from "@/lib/api";
 import { canManageMembers, canViewMembers, roleLabel } from "@/lib/permissions";
 import { useResource } from "@/lib/useResource";
 import type { Workspace } from "@/lib/types";
 import Link from "next/link";
 
-type Tab = "overview" | "members" | "invitations" | "settings";
+type Tab = "overview" | "finance" | "members" | "invitations" | "settings";
 
 function WorkspaceView({ id }: { id: string }) {
   const router = useRouter();
@@ -34,6 +35,7 @@ function WorkspaceView({ id }: { id: string }) {
   const personal = w.type === "PERSONAL";
   const tabs: { id: Tab; label: string; show: boolean }[] = [
     { id: "overview", label: "Overview", show: true },
+    { id: "finance", label: "Finance", show: !personal },
     { id: "members", label: "Members", show: !personal && canViewMembers(w.role) },
     { id: "invitations", label: "Invitations", show: !personal && canViewMembers(w.role) },
     { id: "settings", label: "Settings", show: !personal },
@@ -57,10 +59,11 @@ function WorkspaceView({ id }: { id: string }) {
           <p>
             {personal
               ? "Your personal finances live here. Nobody else — not an employer, not a workspace admin — can see them."
-              : "Business finance features for this workspace appear here as they are released."}
+              : "Invoices, payments, clients, vendors, projects, expenses and summaries are on the Finance tab."}
             {!personal && !canManageMembers(w.role) && " You do not have permission to manage members."}
           </p>
         )}
+        {tab === "finance" && <BusinessApp workspace={w} />}
         {tab === "members" && <MembersPanel workspace={w} />}
         {tab === "invitations" && <InvitationsPanel workspace={w} />}
         {tab === "settings" && <SettingsPanel workspace={w} onRenamed={ws.reload} onLeft={() => router.push("/workspaces")} />}

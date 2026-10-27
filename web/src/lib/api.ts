@@ -95,6 +95,11 @@ export function describeError(error: unknown): string {
     case "VALIDATION_FAILED":
     case "CONFLICT":
     case "BAD_REQUEST":
+    case "ALLOCATION_EXCEEDS":
+    case "ALLOCATION_EXISTS":
+    case "INVOICE_IMMUTABLE":
+    case "INVALID_STATE_TRANSITION":
+    case "TOTAL_MISMATCH":
       return error.detail ?? "The request could not be completed.";
     case "IDEMPOTENCY_KEY_REUSED":
       return "That request was already used for something different. Please try again.";

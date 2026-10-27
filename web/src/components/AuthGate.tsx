@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { currentPath } from "@/lib/redirect";
 import { useSession } from "@/lib/session";
 import { MfaForm } from "./MfaForm";
 import { Loading, Notice } from "./Notice";
@@ -14,12 +15,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return <Loading label="Checking your session…" />;
     case "anonymous":
       return (
-        <section>
-          <h1>Sign in required</h1>
+        <main id="main">
+          <h1>{state.expired ? "Your session has ended" : "Sign in required"}</h1>
           <p>
-            Please <Link href="/login">sign in</Link> or <Link href="/register">create an account</Link> to continue.
+            {state.expired ? "For your security you were signed out. " : ""}
+            Please <Link href={`/login?next=${encodeURIComponent(currentPath())}`}>sign in</Link>{state.expired ? " again to continue where you were." : <> or <Link href="/register">create an account</Link> to continue.</>}
           </p>
-        </section>
+        </main>
       );
     case "mfa":
       return <MfaForm />;

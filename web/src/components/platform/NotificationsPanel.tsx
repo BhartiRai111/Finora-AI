@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { describeError } from "@/lib/api";
 import { useFinance } from "@/lib/FinanceContext";
 import { NOTIFICATION_CATEGORIES, SEVERITY_TEXT, humanizeType, type NotificationPage } from "@/lib/platform";
+import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
 
 const PAGE = 20;
@@ -39,6 +40,8 @@ export function NotificationsPanel({ onChanged }: { onChanged?: () => void }) {
   const [state, setState] = useState<{ s: "loading" } | { s: "error"; m: string } | { s: "ready"; page: NotificationPage }>({ s: "loading" });
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // What the server says about delivery outside the app; if it cannot be read, nothing is claimed either way.
+  const channels = useResource((signal) => finance.get<{ in_app: { status: string }; external: { status: string; message?: string } }>("/finance-notifications/channels", signal).catch(() => null));
 
   useEffect(() => {
     const controller = new AbortController();
@@ -70,7 +73,11 @@ export function NotificationsPanel({ onChanged }: { onChanged?: () => void }) {
   return (
     <section aria-labelledby="notif-title">
       <h2 id="notif-title">Notifications</h2>
-      <p className="muted">Notifications appear here only. No email, SMS or push delivery is configured, so nothing is sent outside the application.</p>
+      <p className="muted">
+        {channels.status === "ready" && channels.data
+          ? (channels.data.external.status === "NOT_CONFIGURED" ? `Notifications appear here only. ${channels.data.external.message ?? "No external delivery is configured."}` : `In-app notifications are available. External delivery: ${channels.data.external.status.toLowerCase().replace(/_/g, " ")}.`)
+          : "Notifications appear in the application. Whether any are delivered elsewhere is reported by the server and could not be loaded."}
+      </p>
       {actionError && <Notice>{actionError}</Notice>}
       <div className="filters" role="group" aria-label="Notification filters">
         <div className="column">

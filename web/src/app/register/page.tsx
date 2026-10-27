@@ -37,7 +37,7 @@ export default function RegisterPage() {
   }
 
   return (
-    <main>
+    <main id="main">
       <form onSubmit={submit} aria-labelledby="register-title" noValidate>
         <h1 id="register-title">Create your account</h1>
         <label htmlFor="reg-name">Your name</label>

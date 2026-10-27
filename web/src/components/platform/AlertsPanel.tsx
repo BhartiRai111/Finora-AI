@@ -6,6 +6,7 @@ import { useFinance } from "@/lib/FinanceContext";
 import { SEVERITY_TEXT, humanizeType, type AlertPage, type AlertSetting, type EvaluationResult } from "@/lib/platform";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
+import { ReasonDialog } from "../ui/Dialog";
 
 const PAGE = 20;
 
@@ -94,16 +95,15 @@ export function AlertsPanel({ canEditSettings }: { canEditSettings: boolean }) {
     }
   }
 
-  async function act(id: string, kind: "acknowledge" | "resolve") {
-    let reason: string | undefined;
-    if (kind === "resolve") {
-      reason = window.prompt("Why is this alert resolved? (optional)") ?? undefined;
-    }
+  const [resolving, setResolving] = useState<string | null>(null);
+
+  async function act(id: string, kind: "acknowledge" | "resolve", reason?: string) {
     setError(null);
     try {
-      await finance.send("POST", `/finance-alerts/${id}/${kind}`, kind === "resolve" ? { reason } : {});
+      await finance.send("POST", `/finance-alerts/${id}/${kind}`, kind === "resolve" ? { reason: reason || undefined } : {});
       setTick((n) => n + 1);
     } catch (e) {
+      if (kind === "resolve") throw new Error(describeError(e));
       setError(describeError(e));
     }
   }
@@ -145,7 +145,7 @@ export function AlertsPanel({ canEditSettings }: { canEditSettings: boolean }) {
                   {a.resolved_reason && <p className="muted">Resolved: {a.resolved_reason}</p>}
                 </details>
                 {a.status === "OPEN" && <button type="button" onClick={() => void act(a.id, "acknowledge")} aria-label={`Acknowledge ${a.title}`}>Acknowledge</button>}
-                {a.status !== "RESOLVED" && <button type="button" onClick={() => void act(a.id, "resolve")} aria-label={`Resolve ${a.title}`}>Resolve</button>}
+                {a.status !== "RESOLVED" && <button type="button" onClick={() => setResolving(a.id)} aria-label={`Resolve ${a.title}`}>Resolve</button>}
               </li>
             ))}
           </ul>
@@ -156,6 +156,8 @@ export function AlertsPanel({ canEditSettings }: { canEditSettings: boolean }) {
           </div>
         </>
       )}
+      <ReasonDialog open={resolving !== null} title="Resolve this alert" description="Resolving records that you have dealt with it. It does not change any financial record." label="Why is this alert resolved?" confirmLabel="Resolve alert"
+        onConfirm={(reason) => act(resolving!, "resolve", reason)} onClose={() => setResolving(null)} />
       <h3>Alert settings</h3>
       {!canEditSettings && <Notice kind="info">You can view the alert settings but not change them.</Notice>}
       {settings.status === "loading" && <Loading label="Loading settings…" />}

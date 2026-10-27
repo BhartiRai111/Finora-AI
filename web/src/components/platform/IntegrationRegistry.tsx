@@ -55,7 +55,7 @@ export function AdminOverviewPanel() {
       <h2 id="adm-title">Workspace administration</h2>
       <Notice kind="info">{d.note}</Notice>
       <ul>
-        <li>Plan: {d.subscription.plan_name} ({d.subscription.status.toLowerCase().replace("_", " ")}){d.subscription.provisional ? ", provisional" : ""}</li>
+        <li>Plan: {d.subscription.plan_name} ({d.subscription.status.toLowerCase().replace("_", " ")}){d.subscription.provisional && !/provisional/i.test(d.subscription.plan_name) ? ", provisional" : ""}</li>
         <li>Integrations by state: {entries(d.integrations_by_state)}</li>
         <li>Open alerts by severity: {entries(d.open_alerts_by_severity)}</li>
         <li>Your unread notifications: {d.unread_notifications}</li>

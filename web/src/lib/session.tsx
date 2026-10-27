@@ -1,12 +1,12 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { api, ApiError, setCsrfToken } from "./api";
+import { api, ApiError, setCsrfToken, setSessionEndedHandler } from "./api";
 import type { User } from "./types";
 
 type SessionState =
   | { status: "loading" }
-  | { status: "anonymous" }
+  | { status: "anonymous"; expired?: boolean }
   | { status: "mfa" }
   | { status: "error" }
   | { status: "ready"; user: User };
@@ -52,6 +52,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // A request refused as unauthenticated while signed in ends the signed-in state; every screen then shows the sign-in prompt.
+  useEffect(() => {
+    setSessionEndedHandler(() => {
+      setCsrfToken(null);
+      setState((previous) => (previous.status === "ready" ? { status: "anonymous", expired: true } : previous));
+    });
+    return () => setSessionEndedHandler(null);
   }, []);
 
   const login = useCallback(

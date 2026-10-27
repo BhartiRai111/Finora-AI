@@ -4,11 +4,12 @@ import { useState } from "react";
 import { describeError } from "@/lib/api";
 import { formatMoney } from "@/lib/finance";
 import { useFinance } from "@/lib/FinanceContext";
-import { humanize, isMoneyColumn, isPercentColumn, saveBlob, type Forecast, type Report } from "@/lib/insights";
+import { humanize, isMoneyColumn, isPercentColumn, saveBlob, type CurrencyReport, type Forecast, type Report } from "@/lib/insights";
 import type { Conversion, RegionalSettings } from "@/lib/regional";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
 import { ConvertedView } from "../regional/ConvertedView";
+import { BarChart } from "../ui/BarChart";
 
 const SERIES = new Set(["cash-flow", "business-performance"]);
 const TITLES: Record<string, string> = {
@@ -19,6 +20,17 @@ const TITLES: Record<string, string> = {
   receivables: "Receivables aging",
   "receivables-by-client": "Receivables by client",
   "project-profitability": "Project profitability",
+};
+
+/** Which columns of each report make sense as bars. Reports not listed here are tables only. */
+const CHARTS: Record<string, string[]> = {
+  "cash-flow": ["income", "net_expense"],
+  "business-performance": ["invoiced_net", "received", "expenses"],
+  "net-worth": ["net_worth"],
+  "budget-vs-actual": ["budget", "spent"],
+  receivables: ["outstanding"],
+  "receivables-by-client": ["amount"],
+  "project-profitability": ["revenue_net", "costs"],
 };
 
 function cell(value: string | undefined, column: string, currency: string): string {
@@ -178,6 +190,7 @@ function ReportView({ report: r }: { report: Report }) {
       {r.currencies.length === 0 && <p>No activity in this period yet, so there is nothing to report.</p>}
       {r.currencies.map((c) => (
         <div key={c.currency} className="column">
+          <ReportChart report={r} c={c} />
           <table>
             <caption>{c.currency}</caption>
             <thead>
@@ -228,6 +241,25 @@ function ReportView({ report: r }: { report: Report }) {
         <ul>{r.notes.map((n) => <li key={n}>{n}</li>)}</ul>
       </details>
     </section>
+  );
+}
+
+/** A chart only when there is something to compare: at least two periods and at least one non-zero value among the charted columns. */
+function ReportChart({ report: r, c }: { report: Report; c: CurrencyReport }) {
+  const wanted = (CHARTS[r.report] ?? []).filter((col) => c.columns.includes(col));
+  const rows = c.rows.filter((row) => row.activity || r.granularity === null);
+  const hasValue = rows.some((row) => wanted.some((col) => Number(row.values[col] ?? "0") !== 0));
+  if (wanted.length === 0 || rows.length < 2 || !hasValue) return null;
+  const labels = rows.map((row) => row.period);
+  const names = wanted.map((col) => humanize(col));
+  return (
+    <BarChart
+      title={`${r.title}: ${names.join(", ")}`}
+      currency={c.currency}
+      labels={labels}
+      series={wanted.map((col) => ({ key: col, label: humanize(col), values: rows.map((row) => row.values[col]) }))}
+      summary={`Bar chart in ${c.currency}: ${names.join(" and ")} for ${rows.length} periods, from ${labels[0]} to ${labels[labels.length - 1]}. The table below lists every value.`}
+    />
   );
 }
 

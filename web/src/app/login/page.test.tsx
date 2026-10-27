@@ -65,4 +65,30 @@ describe("LoginPage", () => {
     await userEvent.click(screen.getByRole("button", { name: "Use a recovery code" }));
     expect(screen.getByLabelText("Recovery code")).toBeInTheDocument();
   });
+
+  async function signInWith(search: string) {
+    window.history.pushState({}, "", `/login${search}`);
+    let signedIn = false;
+    mockApi({
+      "GET /v1/me": () => (signedIn ? { status: 200, body: USER } : problem(401, "AUTH_REQUIRED")),
+      "POST /v1/auth/login": () => { signedIn = true; return { status: 200, body: { csrf_token: "c", mfa_required: false } }; },
+    });
+    renderWithSession(<LoginPage />);
+    await userEvent.type(await screen.findByLabelText("Email"), "asha@example.test");
+    await userEvent.type(screen.getByLabelText("Password"), "a-long-enough-password");
+    await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
+  }
+
+  it("returns to the page the person was on after signing in", async () => {
+    await signInWith("?next=%2Ffinance%2Fbudgets");
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/finance/budgets"));
+    window.history.pushState({}, "", "/");
+  });
+
+  it("never follows a return address that leaves the site", async () => {
+    await signInWith("?next=https%3A%2F%2Fevil.example%2Fphish");
+    await waitFor(() => expect(replace).toHaveBeenCalledWith("/workspaces"));
+    expect(replace).not.toHaveBeenCalledWith(expect.stringContaining("evil"));
+    window.history.pushState({}, "", "/");
+  });
 });

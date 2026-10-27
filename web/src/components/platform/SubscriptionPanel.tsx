@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/finance";
 import { humanizeType, type BillingOverview, type BillingRecord, type Plan, type Subscription, type SubscriptionEvent } from "@/lib/platform";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
+import { ReasonDialog } from "../ui/Dialog";
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -87,6 +88,7 @@ export function SubscriptionPanel({ isOwner, canSeeAdmin }: { isOwner: boolean; 
   const [choice, setChoice] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     if (!canSeeAdmin) return;
@@ -153,13 +155,22 @@ export function SubscriptionPanel({ isOwner, canSeeAdmin }: { isOwner: boolean; 
             )}
             <button type="button" disabled={busy || !choice || s.status !== "ACTIVE"} onClick={() => void act("/finance-subscription/change", { plan_key: choice })}>Switch plan</button>
             {s.status === "ACTIVE" || s.status === "PAST_DUE" ? (
-              <button type="button" disabled={busy} onClick={() => { const reason = window.prompt("Why are you cancelling? (optional)"); if (reason !== null) void act("/finance-subscription/cancel", { reason: reason || undefined }); }}>Cancel subscription</button>
+              <button type="button" disabled={busy} onClick={() => setCancelling(true)}>Cancel subscription</button>
             ) : null}
             {s.status === "CANCELLED" && <button type="button" disabled={busy} onClick={() => void act("/finance-subscription/reactivate", {})}>Reactivate</button>}
           </div>
         ) : (
           <Notice kind="info">Only the workspace Owner can change the plan or cancel the subscription.</Notice>
         )}
+        <ReasonDialog open={cancelling} title="Cancel the subscription" description="Premium features pause. Your financial records are not deleted or hidden, and you can reactivate later." label="Why are you cancelling?" confirmLabel="Cancel subscription" danger
+          onConfirm={async (reason) => {
+            try {
+              await finance.send("POST", "/finance-subscription/cancel", { reason: reason || undefined });
+              sub.reload();
+            } catch (e) {
+              throw new Error(describeError(e));
+            }
+          }} onClose={() => setCancelling(false)} />
         {plans.status === "ready" && (
           <details>
             <summary>Available plans</summary>

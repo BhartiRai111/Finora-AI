@@ -5,8 +5,10 @@ import { describeError } from "@/lib/api";
 import type { Account, Category } from "@/lib/finance";
 import { FinanceProvider, useFinance } from "@/lib/FinanceContext";
 import type { Workspace } from "@/lib/types";
+import { PERSONAL_SECTIONS } from "@/lib/sections";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
+import { EmptyState } from "../ui/States";
 import { api } from "@/lib/api";
 import { AccountsPanel } from "./AccountsPanel";
 import { BudgetsPanel } from "./BudgetsPanel";
@@ -27,32 +29,14 @@ import { ImportsPanel } from "../insights/ImportsPanel";
 import { ReconcilePanel } from "../insights/ReconcilePanel";
 import { ReportsPanel } from "../insights/ReportsPanel";
 
-const TABS = [
-  ["overview", "Overview"],
-  ["accounts", "Accounts"],
-  ["transactions", "Transactions"],
-  ["recurring", "Recurring"],
-  ["budgets", "Budgets"],
-  ["goals", "Goals"],
-  ["bills", "Bills"],
-  ["subscriptions", "Subscriptions"],
-  ["categories", "Categories"],
-  ["reports", "Reports"],
-  ["imports", "Imports"],
-  ["documents", "Documents"],
-  ["reconcile", "Reconcile"],
-  ["assistant", "Assistant"],
-  ["regional", "Currency & region"],
-  ["notifications", "Notifications"],
-  ["alerts", "Alerts"],
-  ["plan", "Plan & billing"],
-  ["integrations", "Integrations"],
-] as const;
+const TABS = PERSONAL_SECTIONS.map((x) => [x.id, x.label] as const);
+type TabId = string;
 
-type TabId = (typeof TABS)[number][0];
-
-/** Finds the signed-in user's personal workspace; personal finance is private to it. */
-export function FinanceApp() {
+/**
+ * Finds the signed-in user's personal workspace; personal finance is private to it. Used on its own it shows its own tabs; given a
+ * `section` (the application shell does this) it renders only that section and navigation is the shell's job.
+ */
+export function FinanceApp({ section, onSectionChange }: { section?: string; onSectionChange?: (id: string) => void } = {}) {
   const workspaces = useResource((signal) => api<{ items: Workspace[] }>("/v1/workspaces", { signal }));
   if (workspaces.status === "loading") return <Loading label="Loading your personal profile…" />;
   if (workspaces.status === "error") {
@@ -67,14 +51,18 @@ export function FinanceApp() {
   if (!personal) return <Notice>You have no personal profile yet. Personal finance is only available in a personal profile.</Notice>;
   return (
     <FinanceProvider space={personal.id}>
-      <FinanceShell />
+      <FinanceShell section={section} onSectionChange={onSectionChange} />
     </FinanceProvider>
   );
 }
 
-function FinanceShell() {
+function FinanceShell({ section, onSectionChange }: { section?: string; onSectionChange?: (id: string) => void }) {
   const finance = useFinance();
-  const [tab, setTab] = useState<TabId>("overview");
+  const [localTab, setLocalTab] = useState<TabId>("overview");
+  const controlled = section !== undefined;
+  const known = TABS.some(([id]) => id === section);
+  const tab: TabId = controlled ? (known ? section : "overview") : localTab;
+  const setTab = (id: TabId) => (onSectionChange ? onSectionChange(id) : setLocalTab(id));
   const [unreadKey, setUnreadKey] = useState(0);
   const base = useResource(async (signal) => {
     const [a, c] = await Promise.all([
@@ -93,20 +81,23 @@ function FinanceShell() {
       </>
     );
   }
+  if (controlled && !known) return <EmptyState title="This page does not exist">Choose a section from the menu.</EmptyState>;
   const { accounts, categories } = base.data;
   const open = accounts.filter((a) => !a.archived);
   const needsAccount = ["transactions", "recurring"].includes(tab);
   return (
     <>
       <NotificationStrip onOpen={() => setTab("notifications")} refreshKey={unreadKey} />
-      <div role="tablist" aria-label="Finance sections" className="tabs">
-        {TABS.map(([id, label]) => (
-          <button key={id} role="tab" type="button" aria-selected={tab === id} className={tab === id ? "tab active" : "tab"} onClick={() => setTab(id)}>
-            {label}
-          </button>
-        ))}
-      </div>
-      <section role="tabpanel">
+      {!controlled && (
+        <div role="tablist" aria-label="Finance sections" className="tabs">
+          {TABS.map(([id, label]) => (
+            <button key={id} role="tab" type="button" aria-selected={tab === id} className={tab === id ? "tab active" : "tab"} onClick={() => setTab(id)}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+      <section role={controlled ? undefined : "tabpanel"}>
         {needsAccount && open.length === 0 && tab !== "bills" && tab !== "subscriptions" && (
           <Notice kind="info">Add an account on the Accounts tab before recording transactions.</Notice>
         )}

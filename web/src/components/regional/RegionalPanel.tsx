@@ -6,6 +6,7 @@ import { useFinance } from "@/lib/FinanceContext";
 import { monthName, rateProblem, type RateStatus, type RateView, type RegionalSettings, formatDateText } from "@/lib/regional";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
+import { ReasonDialog } from "../ui/Dialog";
 
 /** Suggestions only: engines list canonical names (Asia/Calcutta), so common names are added and the server stays the judge. */
 const ZONES = [...new Set([...(typeof Intl !== "undefined" && "supportedValuesOf" in Intl ? (Intl as unknown as { supportedValuesOf: (k: string) => string[] }).supportedValuesOf("timeZone") : []), "UTC", "Asia/Kolkata"])];
@@ -146,15 +147,15 @@ function Rates({ settings, status }: { settings: RegionalSettings; status: RateS
     }
   }
 
-  async function voidRate(id: string) {
-    const reason = window.prompt("Why is this rate being voided?");
-    if (!reason?.trim()) return;
+  const [voiding, setVoiding] = useState<string | null>(null);
+
+  async function voidRate(id: string, reason: string) {
     setError(null);
     try {
-      await finance.send("POST", `/finance-rates/${id}/void`, { reason: reason.trim() });
+      await finance.send("POST", `/finance-rates/${id}/void`, { reason });
       rates.reload();
     } catch (e) {
-      setError(describeError(e));
+      throw new Error(describeError(e));
     }
   }
 
@@ -204,12 +205,35 @@ function Rates({ settings, status }: { settings: RegionalSettings; status: RateS
                 <td>{formatDateText(r.rate_date, settings.date_format)}</td>
                 <td>{r.source === "USER_SUPPLIED" ? "User-supplied" : r.source}{r.source_note ? ` (${r.source_note})` : ""}</td>
                 <td>{r.status === "VOIDED" ? `Voided: ${r.void_reason ?? ""}` : "Active"}</td>
-                {canWrite && <td>{r.status === "ACTIVE" && <button type="button" onClick={() => void voidRate(r.id)}>Void</button>}</td>}
+                {canWrite && <td>{r.status === "ACTIVE" && <button type="button" onClick={() => setVoiding(r.id)}>Void</button>}</td>}
               </tr>
             ))}
           </tbody>
         </table>
       )}
+      <ReasonDialog open={voiding !== null} title="Void this exchange rate" description="A voided rate is kept for the record but is never used for conversion." label="Reason" required confirmLabel="Void rate" danger
+        onConfirm={(reason) => voidRate(voiding!, reason)} onClose={() => setVoiding(null)} />
+    </section>
+  );
+}
+
+type PeriodsView = { today: string; fiscal_year_start_month: number; periods: Record<string, { from: string; to: string; end: string }>; notes: string[] };
+
+/** The fiscal periods the server derives from the fiscal-year setting, so people can see which dates "this fiscal year" means. */
+function FiscalPeriods() {
+  const finance = useFinance();
+  const periods = useResource((signal) => finance.get<PeriodsView>("/finance-regional/periods", signal).catch(() => null));
+  if (periods.status !== "ready" || !periods.data) return null;
+  const d = periods.data;
+  return (
+    <section aria-labelledby="fy-title">
+      <h2 id="fy-title">Fiscal periods</h2>
+      <table>
+        <caption>Periods as of {d.today}, with the fiscal year starting in {monthName(d.fiscal_year_start_month)}</caption>
+        <thead><tr><th scope="col">Period</th><th scope="col">From</th><th scope="col">To</th><th scope="col">Last day</th></tr></thead>
+        <tbody>{Object.entries(d.periods).map(([k, r]) => <tr key={k}><th scope="row">{k.replace(/_/g, " ").toLowerCase().replace(/^./, (c) => c.toUpperCase())}</th><td>{r.from}</td><td>{r.to}</td><td>{r.end}</td></tr>)}</tbody>
+      </table>
+      {d.notes.map((n) => <p key={n} className="muted">{n}</p>)}
     </section>
   );
 }
@@ -232,6 +256,7 @@ export function RegionalPanel() {
   return (
     <>
       <SettingsForm settings={settings.data} canWrite={status.data.manual_entry.can_write} onSaved={settings.reload} />
+      <FiscalPeriods />
       <Rates settings={settings.data} status={status.data} />
     </>
   );

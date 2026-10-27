@@ -156,8 +156,6 @@ describe("exchange rates", () => {
   });
 
   it("shows a duplicate-rate refusal and voids a rate with a reason", async () => {
-    vi.stubGlobal("prompt", vi.fn(() => "typo"));
-    window.prompt = vi.fn(() => "typo");
     const api = mockApi({
       ...regionalRoutes(true, [RATE]),
       "POST /v1/spaces/p1/finance-rates": () => problem(409, "CONFLICT", "An active rate for USD/INR on 2026-03-15 already exists; void it first to enter a corrected one"),
@@ -168,6 +166,8 @@ describe("exchange rates", () => {
     await userEvent.click(screen.getByRole("button", { name: "Add rate" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("already exists");
     await userEvent.click(screen.getByRole("button", { name: "Void" }));
+    await userEvent.type(await screen.findByLabelText("Reason"), "typo");
+    await userEvent.click(screen.getByRole("button", { name: "Void rate" }));
     await waitFor(() => expect(api.calls.some((c) => c.key.endsWith("/void"))).toBe(true));
     expect(api.calls.find((c) => c.key.endsWith("/void"))!.body).toEqual({ reason: "typo" });
   });
@@ -313,6 +313,25 @@ describe("GST", () => {
     expect(screen.getByText(/EXCLUDED_NO_GST_DETAILS/)).toBeInTheDocument();
     expect(screen.getByText(/NOT an official GST return/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Download preparation worksheet/ })).toBeInTheDocument();
+  });
+
+  it("lists the lines behind the summary, with each line's inclusion status, only when asked", async () => {
+    const api = mockApi(gstRoutes({
+      "GET /v1/spaces/p1/finance-gst/summary": () => ({ status: 200, body: SUMMARY }),
+      "GET /v1/spaces/p1/finance-gst/transactions": () => ({ status: 200, body: { rows: [
+        { type: "SALE", record_id: "i1", number: "INV-1", date: "2026-02-03", party: "Acme", party_gstin: "", place_of_supply: "Maharashtra", supply_type: "INTRA_STATE", tax_percent: "18", taxable_amount: "1000.00", cgst: "90.00", sgst: "90.00", igst: "", total_tax: "180.00", status: "INCLUDED" },
+        { type: "SALE", record_id: "i2", number: "INV-2", date: "2026-02-04", party: "Beta", party_gstin: "", place_of_supply: "", supply_type: "", tax_percent: "", taxable_amount: "", cgst: "", sgst: "", igst: "", total_tax: "", status: "EXCLUDED_NO_GST_DETAILS" },
+      ] } }),
+    }));
+    wrap(<GstPanel canEditRegistration canEditDetails canExport />);
+    await userEvent.click(await screen.findByRole("button", { name: "Show GST summary" }));
+    await screen.findByRole("table", { name: /Tax on sales/ });
+    expect(api.calls.some((c) => c.key.includes("/finance-gst/transactions"))).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Show transaction detail" }));
+    const table = await screen.findByRole("table", { name: /Lines behind the summary/ });
+    expect(within(table).getByText("INV-1")).toBeInTheDocument();
+    expect(within(table).getByText("included")).toBeInTheDocument();
+    expect(within(table).getByText("excluded no gst details")).toBeInTheDocument();
   });
 
   it("validates the period and reports a failed summary with a retry", async () => {

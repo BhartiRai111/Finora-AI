@@ -21,6 +21,14 @@ export function setCsrfToken(token: string | null): void {
   csrfToken = token;
 }
 
+// Called when a request made during a signed-in session is refused because the session is gone (expired, revoked or signed out
+// elsewhere), so the app can leave the signed-in state instead of showing every panel as broken.
+let onSessionEnded: (() => void) | null = null;
+
+export function setSessionEndedHandler(handler: (() => void) | null): void {
+  onSessionEnded = handler;
+}
+
 type RequestOptions = {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
@@ -63,6 +71,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   }
   if (!response.ok) {
     const problem = (data ?? {}) as { code?: string; detail?: string; retry_after_seconds?: number };
+    if (response.status === 401 && problem.code === "AUTH_REQUIRED" && !path.startsWith("/v1/me") && !path.startsWith("/v1/auth/")) onSessionEnded?.();
     throw new ApiError(response.status, problem.code ?? "ERROR", problem.detail, problem.retry_after_seconds);
   }
   return data as T;

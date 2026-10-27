@@ -151,6 +151,47 @@ function SummarySection({ canExport }: { canExport: boolean }) {
       {state.s === "loading" && <Loading label="Loading GST summary…" />}
       {state.s === "error" && <><Notice>{state.m}</Notice><button type="button" onClick={() => void load()}>Try again</button></>}
       {state.s === "ready" && <SummaryView s={state.data} />}
+      {state.s === "ready" && <TransactionDetail qs={qs} />}
+    </section>
+  );
+}
+
+type GstRow = Record<string, string>;
+
+/** The record-level lines behind the summary, exactly as the server lists them (included, excluded and unsupported). */
+function TransactionDetail({ qs }: { qs: string }) {
+  const finance = useFinance();
+  const [state, setState] = useState<{ s: "idle" } | { s: "loading" } | { s: "error"; m: string } | { s: "ready"; rows: GstRow[] }>({ s: "idle" });
+  async function load() {
+    setState({ s: "loading" });
+    try {
+      const r = await finance.get<{ rows: GstRow[] }>(`/finance-gst/transactions${qs}`);
+      setState({ s: "ready", rows: r.rows });
+    } catch (e) {
+      setState({ s: "error", m: describeError(e) });
+    }
+  }
+  return (
+    <section aria-labelledby="gst-tx-title">
+      <h3 id="gst-tx-title">Transaction detail</h3>
+      <button type="button" onClick={() => void load()} disabled={state.s === "loading"}>{state.s === "ready" ? "Refresh detail" : "Show transaction detail"}</button>
+      {state.s === "loading" && <Loading label="Loading transaction detail…" />}
+      {state.s === "error" && <Notice>{state.m}</Notice>}
+      {state.s === "ready" && state.rows.length === 0 && <p>There are no sales or purchases in this period.</p>}
+      {state.s === "ready" && state.rows.length > 0 && (
+        <table>
+          <caption>Lines behind the summary (INR; status says whether each is included)</caption>
+          <thead><tr><th scope="col">Type</th><th scope="col">Date</th><th scope="col">Number</th><th scope="col">Party</th><th scope="col">Place of supply</th><th scope="col">Rate %</th><th scope="col">Taxable</th><th scope="col">CGST</th><th scope="col">SGST</th><th scope="col">IGST</th><th scope="col">Status</th></tr></thead>
+          <tbody>
+            {state.rows.map((r, i) => (
+              <tr key={`${r.record_id}-${i}`}>
+                <td>{r.type === "SALE" ? "Sale" : "Purchase"}</td><td>{r.date}</td><td>{r.number || "—"}</td><td>{r.party || "—"}</td><td>{r.place_of_supply || "—"}</td>
+                <td>{r.tax_percent || "—"}</td><td>{r.taxable_amount || "—"}</td><td>{r.cgst || "—"}</td><td>{r.sgst || "—"}</td><td>{r.igst || "—"}</td><td>{(r.status ?? "").replace(/_/g, " ").toLowerCase()}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </section>
   );
 }

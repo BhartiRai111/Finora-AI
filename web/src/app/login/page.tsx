@@ -6,6 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { MfaForm } from "@/components/MfaForm";
 import { Notice } from "@/components/Notice";
 import { describeError } from "@/lib/api";
+import { safeNext } from "@/lib/redirect";
 import { useSession } from "@/lib/session";
 
 export default function LoginPage() {
@@ -17,7 +18,7 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (state.status === "ready") router.replace("/workspaces");
+    if (state.status === "ready") router.replace(safeNext(new URLSearchParams(window.location.search).get("next")) ?? "/workspaces");
   }, [state.status, router]);
 
   async function submit(event: FormEvent) {
@@ -37,10 +38,10 @@ export default function LoginPage() {
     }
   }
 
-  if (state.status === "mfa") return <main><MfaForm /></main>;
+  if (state.status === "mfa") return <main id="main"><MfaForm /></main>;
 
   return (
-    <main>
+    <main id="main">
       <form onSubmit={submit} aria-labelledby="login-title" noValidate>
         <h1 id="login-title">Sign in</h1>
         <label htmlFor="login-email">Email</label>

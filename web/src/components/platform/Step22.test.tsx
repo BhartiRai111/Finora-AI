@@ -11,6 +11,7 @@ import { SubscriptionPanel } from "./SubscriptionPanel";
 afterEach(() => vi.unstubAllGlobals());
 
 const me = { "GET /v1/me": () => ({ status: 200, body: USER }) };
+const channels = { "GET /v1/spaces/b1/finance-notifications/channels": () => ({ status: 200, body: { in_app: { status: "AVAILABLE" }, external: { status: "NOT_CONFIGURED", message: "No email, SMS, push or webhook delivery provider has been approved or configured. Notifications appear in the application only; nothing is sent outside it." } } }) };
 const wrap = (ui: React.ReactElement) => renderWithSession(<FinanceProvider space="b1">{ui}</FinanceProvider>);
 
 const note = (id: string, read: boolean) => ({ id, category: "IMPORT", severity: "WARNING", title: `Import ${id}`, body: "Some rows failed.", metadata: {}, read, created_at: "2026-03-15T10:00:00Z" });
@@ -20,11 +21,12 @@ describe("notifications", () => {
     let items = [note("n1", false), note("n2", true)];
     const { calls } = mockApi({
       ...me,
+      ...channels,
       "GET /v1/spaces/b1/finance-notifications?limit=20&offset=0": () => ({ status: 200, body: { items, total: 2, unread: items.filter((i) => !i.read).length, limit: 20, offset: 0 } }),
       "POST /v1/spaces/b1/finance-notifications/n1/read": () => { items = [note("n1", true), note("n2", true)]; return { status: 200, body: {} }; },
     });
     wrap(<NotificationsPanel />);
-    expect(await screen.findByText(/No email, SMS or push delivery is configured/)).toBeInTheDocument();
+    expect(await screen.findByText(/nothing is sent outside it/)).toBeInTheDocument();
     expect(await screen.findByText(/· unread\)/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: 'Mark "Import n1" as read' }));
     await waitFor(() => expect(calls.some((c) => c.key.endsWith("/n1/read"))).toBe(true));
@@ -35,6 +37,7 @@ describe("notifications", () => {
     let unread = 2;
     const { calls } = mockApi({
       ...me,
+      ...channels,
       "GET /v1/spaces/b1/finance-notifications?limit=20&offset=0": () => ({ status: 200, body: { items: [note("n1", unread === 0), note("n2", unread === 0)], total: 2, unread, limit: 20, offset: 0 } }),
       "POST /v1/spaces/b1/finance-notifications/read-all": () => { unread = 0; return { status: 200, body: {} }; },
     });
@@ -47,6 +50,7 @@ describe("notifications", () => {
     let fail = true;
     mockApi({
       ...me,
+      ...channels,
       "GET /v1/spaces/b1/finance-notifications?limit=20&offset=0": () => fail ? problem(500, "INTERNAL") : { status: 200, body: { items: [], total: 0, unread: 0, limit: 20, offset: 0 } },
     });
     wrap(<NotificationsPanel />);
@@ -60,6 +64,7 @@ describe("notifications", () => {
     const seen: string[] = [];
     mockApi({
       ...me,
+      ...channels,
       "GET /v1/spaces/b1/finance-notifications?limit=20&offset=0": () => { seen.push("0"); return { status: 200, body: { items: [note("n1", true)], total: 25, unread: 0, limit: 20, offset: 0 } }; },
       "GET /v1/spaces/b1/finance-notifications?limit=20&offset=20": () => { seen.push("20"); return { status: 200, body: { items: [note("n2", true)], total: 25, unread: 0, limit: 20, offset: 20 } }; },
     });
@@ -168,7 +173,7 @@ describe("plan and billing", () => {
     wrap(<SubscriptionPanel isOwner={false} canSeeAdmin={false} />);
     expect(await screen.findByText(/Only the workspace Owner can change the plan/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel subscription" })).toBeNull();
-    expect(screen.getByLabelText("Billing contact email")).toBeDisabled();
+    expect(await screen.findByLabelText("Billing contact email")).toBeDisabled();
   });
 
   it("shows a past-due notice and that features are unavailable, and offers reactivation when cancelled", async () => {

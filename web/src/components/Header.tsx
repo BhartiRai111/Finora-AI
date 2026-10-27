@@ -1,19 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { getActiveWorkspaceId, setActiveWorkspaceId } from "@/lib/activeWorkspace";
 import { useSession } from "@/lib/session";
 import type { Workspace } from "@/lib/types";
+import { AccountMenu } from "./shell/AccountMenu";
 
-/** Brand, workspace switcher (always shows the active workspace) and sign-out. */
+/** Brand, workspace switcher (follows the page you are on), main links and the account menu. */
 export function Header() {
-  const { state, logout } = useSession();
+  const { state } = useSession();
   const router = useRouter();
+  const pathname = usePathname() ?? "";
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [active, setActive] = useState<string>("");
+  const [chosen, setChosen] = useState<string>("");
 
   useEffect(() => {
     if (state.status !== "ready") return;
@@ -22,19 +24,24 @@ export function Header() {
       .then((r) => {
         setWorkspaces(r.items);
         const stored = getActiveWorkspaceId();
-        const chosen = r.items.find((w) => w.id === stored) ?? r.items[0];
-        if (chosen) setActive(chosen.id);
+        const found = r.items.find((w) => w.id === stored) ?? r.items[0];
+        if (found) setChosen(found.id);
       })
       .catch(() => setWorkspaces([]));
     return () => controller.abort();
   }, [state.status]);
 
   const visible = state.status === "ready" ? workspaces : [];
+  // The page you are on wins over the remembered choice, so the switcher never disagrees with the screen.
+  const onWorkspace = /^\/workspaces\/([^/]+)/.exec(pathname)?.[1];
+  const personalId = visible.find((w) => w.type === "PERSONAL")?.id;
+  const current = onWorkspace && visible.some((w) => w.id === onWorkspace) ? onWorkspace : pathname.startsWith("/finance") && personalId ? personalId : chosen;
 
   function switchTo(id: string) {
-    setActive(id);
+    setChosen(id);
     setActiveWorkspaceId(id);
-    router.push(`/workspaces/${id}`);
+    const target = visible.find((w) => w.id === id);
+    router.push(target?.type === "PERSONAL" ? "/finance" : `/workspaces/${id}`);
   }
 
   return (
@@ -49,7 +56,7 @@ export function Header() {
               <label htmlFor="workspace-switcher" className="visually-hidden">
                 Active workspace
               </label>
-              <select id="workspace-switcher" value={active} onChange={(e) => switchTo(e.target.value)}>
+              <select id="workspace-switcher" value={current} onChange={(e) => switchTo(e.target.value)}>
                 {visible.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.type === "PERSONAL" ? "Personal profile" : w.name}
@@ -58,12 +65,9 @@ export function Header() {
               </select>
             </>
           )}
-          <Link href="/finance">Finance</Link>
-          <Link href="/workspaces">Workspaces</Link>
-          <Link href="/account">Account</Link>
-          <button type="button" className="link" onClick={() => void logout()}>
-            Sign out
-          </button>
+          <Link href="/finance" aria-current={pathname.startsWith("/finance") ? "page" : undefined}>Personal finance</Link>
+          <Link href="/workspaces" aria-current={pathname === "/workspaces" ? "page" : undefined}>Workspaces</Link>
+          <AccountMenu />
         </nav>
       )}
     </header>

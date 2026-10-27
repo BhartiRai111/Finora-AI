@@ -91,6 +91,25 @@ describe("Header", () => {
     expect(screen.getByRole("link", { name: "Personal finance" })).toHaveAttribute("aria-current", "page");
   });
 
+  it("fetches the workspace list again when the page is on a workspace created after it was loaded", async () => {
+    let calls = 0;
+    mockApi({
+      ...me,
+      "GET /v1/workspaces": () => { calls += 1; return { status: 200, body: { items: calls === 1 ? [WS.items[0]] : WS.items } }; },
+    });
+    nav.pathname = "/workspaces/b1/assistant";
+    try {
+      renderWithSession(<Header />);
+      const select = await screen.findByLabelText("Active workspace");
+      await waitFor(() => expect(select).toHaveValue("b1"));
+      // once for the first load, once because the page is on an unknown workspace, and once more when the list changed; never an endless loop
+      expect(calls).toBeGreaterThanOrEqual(2);
+      expect(calls).toBeLessThanOrEqual(3);
+    } finally {
+      nav.pathname = "/finance/budgets";
+    }
+  });
+
   it("shows only the brand to someone who is not signed in", async () => {
     mockApi({ "GET /v1/me": () => ({ status: 401, body: { code: "AUTH_REQUIRED" } }) });
     renderWithSession(<Header />);
@@ -176,5 +195,21 @@ describe("shared states", () => {
     expect(screen.getByText("Nothing yet")).toBeInTheDocument();
     expect(screen.getByText("You do not have access to this section.")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Loading reports…");
+  });
+});
+
+describe("document title", () => {
+  it("puts the page title back when something else overwrites it, and stops when the page goes away", async () => {
+    const { unmount } = render(<AppShell contextLabel="Acme" nav={NAV} currentId="accounts" title="Accounts">x</AppShell>);
+    expect(document.title).toBe("Accounts · Acme · Finora AI");
+    document.title = "Finora AI";
+    await waitFor(() => expect(document.title).toBe("Accounts · Acme · Finora AI"));
+    // the element itself being replaced (as a framework may do) is also undone
+    document.head.querySelector("title")!.replaceWith(Object.assign(document.createElement("title"), { textContent: "Finora AI" }));
+    await waitFor(() => expect(document.title).toBe("Accounts · Acme · Finora AI"));
+    unmount();
+    document.title = "Elsewhere";
+    await new Promise((r) => setTimeout(r, 30));
+    expect(document.title).toBe("Elsewhere");
   });
 });

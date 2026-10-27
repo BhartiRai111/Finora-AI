@@ -20,7 +20,8 @@ import { ProjectsPanel } from "./ProjectsPanel";
 import { AccountingPanel } from "../accounting/AccountingPanel";
 import { GstPanel } from "../gst/GstPanel";
 import { AlertsPanel } from "../platform/AlertsPanel";
-import { AdminOverviewPanel, IntegrationRegistry } from "../platform/IntegrationRegistry";
+import { AdminPanel } from "../platform/AdminPanel";
+import { IntegrationRegistry } from "../platform/IntegrationRegistry";
 import { NotificationStrip, NotificationsPanel } from "../platform/NotificationsPanel";
 import { SubscriptionPanel } from "../platform/SubscriptionPanel";
 import { RegionalPanel } from "../regional/RegionalPanel";
@@ -146,7 +147,7 @@ function BusinessShell({ workspace, section, onSectionChange }: { workspace: Wor
         {tab === "notifications" && <NotificationsPanel onChanged={changed} />}
         {tab === "alerts" && <AlertsPanel canEditSettings={businessAccess.settingsWrite(role)} />}
         {tab === "plan" && <SubscriptionPanel isOwner={role === "OWNER"} canSeeAdmin={businessAccess.settingsWrite(role)} />}
-        {tab === "admin" && <AdminOverviewPanel />}
+        {tab === "admin" && <AdminPanel />}
         {tab === "settings" && <BusinessSettingsPanel role={role} onSaved={changed} />}
       </section>
     </>

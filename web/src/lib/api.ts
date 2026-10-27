@@ -88,8 +88,9 @@ async function failure(response: Response): Promise<ApiError> {
 }
 
 /** Uploads a file as the raw request body (the browser-provided type is never relied on by the server). */
-export async function apiUpload<T>(path: string, file: Blob, contentType: string, signal?: AbortSignal): Promise<T> {
+export async function apiUpload<T>(path: string, file: Blob, contentType: string, signal?: AbortSignal, idempotencyKey?: string): Promise<T> {
   const headers: Record<string, string> = { Accept: "application/json", "Content-Type": contentType };
+  if (idempotencyKey) headers["Idempotency-Key"] = idempotencyKey;
   if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
   let response: Response;
   try {
@@ -151,6 +152,10 @@ export function describeError(error: unknown): string {
     case "INVALID_STATE_TRANSITION":
     case "TOTAL_MISMATCH":
       return error.detail ?? "The request could not be completed.";
+    case "PAYLOAD_TOO_LARGE":
+      return error.detail ?? "That file is too large.";
+    case "UNSUPPORTED_MEDIA_TYPE":
+      return "That kind of file is not supported here.";
     case "IDEMPOTENCY_KEY_REUSED":
       return "That request was already used for something different. Please try again.";
     case "FEATURE_UNAVAILABLE":

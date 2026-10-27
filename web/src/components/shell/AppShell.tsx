@@ -5,6 +5,22 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import type { NavGroup } from "@/lib/sections";
 
 /**
+ * Sets the browser tab title and keeps it: the framework's own metadata handling can write its default title again after a client-side
+ * navigation, so a change that is not ours is put back. Stops when the page changes or unmounts.
+ */
+function useDocumentTitle(title: string) {
+  useEffect(() => {
+    document.title = title;
+    // Watch the whole head: the framework may replace the <title> element itself, not just its text.
+    const observer = new MutationObserver(() => {
+      if (document.title !== title) document.title = title;
+    });
+    observer.observe(document.head, { childList: true, characterData: true, subtree: true });
+    return () => observer.disconnect();
+  }, [title]);
+}
+
+/**
  * The authenticated application frame: a labelled section navigation beside the content, a page title with a short description,
  * and a collapsible menu on small screens. It holds no data and makes no requests, so it cannot show anything the page did not load.
  */
@@ -20,9 +36,7 @@ export function AppShell({ contextLabel, badge, nav, currentId, title, descripti
   const [open, setOpen] = useState(false);
   const navId = useId();
 
-  useEffect(() => {
-    document.title = `${title} · ${contextLabel} · Finora AI`;
-  }, [title, contextLabel]);
+  useDocumentTitle(`${title} · ${contextLabel} · Finora AI`);
 
   return (
     <div className="shell">

@@ -65,6 +65,10 @@ labelled an estimate with its assumptions and warnings. The what-if applies the 
 income/revenue and spending per month with `HALF_EVEN` rounding to the currency's minor unit and reports baseline vs scenario net. It is labelled
 hypothetical, is never saved, and changes no budget, invoice, payment, subscription or record. A currency without an estimate for both sides gets no scenario.
 
+## The assistant screen (Step 24)
+
+The web screen (`web/src/components/assistant`) renders only what the endpoints return; see `docs/web-application.md` for its states. In particular: the read-only guarantee and limits come from the status endpoint; a reply without the expected shape is refused rather than rendered; one request runs at a time; the explain-a-change and anomaly requests accept an optional currency; when `ai.status` is `NOT_CONFIGURED` (the only state this repository can reach) the screen says no AI model wrote the answers. End-to-end tests (`Step24EndToEndTest`) check against the real stack that: no data answers `NO_DATA` with no sections; hostile or unsupported questions return `UNSUPPORTED` or `NEEDS_CLARIFICATION`, change nothing and echo no secrets; what-if percentages outside -100..1000, with more than 2 decimals, or non-numeric are refused (an in-range exponent form such as `1e3` is accepted as 1000); expenses alone are not enough history for a scenario; a scenario saves nothing; the per-person hourly limit answers 429 `RATE_LIMITED` without the question text and does not affect another person; a Viewer is refused, a non-member gets 404, and an Admin gets no record-level anomaly detail.
+
 ## Architecture
 
 ```

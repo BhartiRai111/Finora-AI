@@ -105,10 +105,40 @@ workspace-finance read. See `docs/identity-auth.md` and `docs/business-finance.m
 * **Platform-wide administration:** not implemented. It needs a platform-staff identity and authorization model that has not been decided. The administration
   view is explicitly this workspace only.
 * **Email:** password-reset, invitation and verification emails are not delivered; email verification and workspace deletion do not exist in the backend.
+* **Imports:** CSV only (the backend has no Excel reader); the browser's file checks mirror but never replace the server's. There is no way to edit a bad row in place: fix the file and import again, or download the error report.
 * **Not surfaced in the UI although the backend has them:** tag management (`/tags`), the net-worth monthly series endpoint (the net-worth report covers it), and
   the single-rate lookup (`/finance-rates/lookup`). Sorting is offered only where an API provides it; most lists are ordered by the server.
 * Each panel keeps its own heading under the shell's page title, so a few pages repeat the title once. Tables scroll horizontally on narrow screens rather than
   reflowing.
+
+## AI assistant screen (Step 24)
+
+The screen shows what the backend returns and nothing else. It states the read-only guarantee, the per-person question limit and, when no provider is configured (today), that no AI model wrote the answers. Each answer shows how the question was understood, the period, each table with its kind (verified, estimate, hypothetical, potential anomaly, converted) and currency, and the assumptions, limits and sources. Supported requests: free questions (spending, categories, expense change, cash flow, unusual transactions, forecast, what-if, overdue invoices, GST summary, project profitability), the explain-a-change and anomaly requests (optionally for one currency), and what-if scenarios with percentage assumptions checked locally before sending.
+
+States: loading; **no data**, **needs clarification** and **unsupported** (shown as information, never as an error or an invented number); **rate limited** and **refused** (role, plan or entitlement) in the server's own words; provider unavailable, failed or blocked (the verified figures stay visible and the AI text is absent); network and server errors with a retry. A reply that does not have the expected shape is never rendered: it becomes a plain "cannot read" error. A second request is not sent while one is running (button, example questions and Enter), so a double click cannot ask twice or use up the limit.
+
+## Import, document and reconciliation screens (Step 24)
+
+* **File rules (as the server enforces them):** imports accept CSV only, up to 2 MB, 5,000 rows, 40 columns and 1,000 characters per cell. The browser refuses spreadsheets (`.xlsx`, `.xls`, `.xlsm`, `.ods`), any non-CSV name, empty and oversized files before sending; the server's own refusals (too large, too many rows, not readable text, unknown kind) are shown in its words. **Excel is not supported** by the backend. Documents accept PDF, PNG or JPEG up to 10 MB, judged by content on the server.
+* **Journey:** choose file (and account for personal imports) → upload (one import per file; a retry after a failure reuses the same idempotency key, a double click sends one request, and a same-named earlier file is mentioned but not blocked) → the file's first rows are shown beside the column mapping → "Check the file" validates every row (the row list is fetched again after checking, so it never shows rows from before) → preview with ready, problem, duplicate and possible-duplicate counts, row filter and paging → an explicit choice for possible duplicates and an explicit confirmation → the result is shown only as the server reports it (completed, partial with rejected rows, failed, cancelled). A running import is checked every 3 seconds and is shown as finished only when the server says so. Rejected rows download as an error report. History is paged by the server.
+* **Not done silently:** invalid rows are never committed; duplicates need an explicit choice; reconciliation suggestions are matched only after "Confirm match" (and can be undone with a reason); a document creates a record only after the person confirms checked values.
+* **OCR:** no OCR engine is configured; documents say text reading is unavailable and the values are typed by the person.
+
+## Workspace administration (Step 24)
+
+The Administration section (Owner and Admin in the navigation; the server allows any role with company-settings read, which also includes Accountants, and answers 403 to the others) shows, for this workspace only: the overview counts, plan and entitlements (provisional plans are labelled), integration health for every external service from real configuration and records, up to five open alerts (titles only, no figures) with links, notifications count, and billing history paged by the server (application records, never confirmed payments without a verified reference). Each part loads and fails on its own with a retry. It states, once, that platform-wide administration is **not available** and why: it needs an approved platform-staff identity and authorization model (sign-in, roles, limits, audit and separation from workspace roles). There are no disabled or pretend controls for it, no staff roles and no bypass; forged role or tenant headers are ignored by the server (verified in the end-to-end suite).
+
+## Tests: what each layer uses
+
+| Layer | Command | Uses | Covers |
+|---|---|---|---|
+| Component and unit | `cd web && pnpm test` | **mocked `fetch`**, jsdom, no backend, no browser | screens, states, validation, accessibility interactions |
+| Lint, types, build | `cd web && pnpm lint && pnpm typecheck && pnpm build` | none | static checks |
+| Backend end-to-end | `./mvnw -B verify -pl tests/e2e,services/api-gateway,services/identity-access,services/finance -am -Dtest='*EndToEndTest,RouteTableTest' -Dsurefire.failIfNoSpecifiedTests=false` (needs dev PostgreSQL) | **real** gateway, identity-access, finance, PostgreSQL over HTTP; no browser | sessions, CSRF, roles, isolation, imports, assistant, administration, unconfigured providers (`Step24EndToEndTest` is new) |
+| Full backend | `./mvnw -B verify` | real services and database | everything above plus unit and service tests |
+| Browser smoke | `tests/web-smoke/run.sh` (manual, see its README) | **real browser and real stack**, three labelled stubs | complete journeys in the app |
+
+No test uses a real AI, OCR, payment, accounting or delivery provider, and none needs third-party credentials: none of those exists in this repository. Stubs and mocks are confined to the component tests and the three labelled browser stubs.
 
 ## Verification
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { describeError } from "@/lib/api";
 import { useFinance } from "@/lib/FinanceContext";
 import { formatMoney } from "@/lib/finance";
@@ -11,10 +11,57 @@ import { ReasonDialog } from "../ui/Dialog";
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
+const RECORD_PAGE = 20;
+
+/** Billing history, paged by the server. A record is an application record; only a verified provider reference makes a payment "confirmed". */
+export function BillingRecords({ pageSize = RECORD_PAGE }: { pageSize?: number }) {
+  const finance = useFinance();
+  const [offset, setOffset] = useState(0);
+  const records = useResource((signal) => finance.get<{ items: BillingRecord[]; total: number }>(`/finance-billing/records?limit=${pageSize}${offset > 0 ? `&offset=${offset}` : ""}`, signal));
+  const shown = useRef(offset);
+  useEffect(() => {
+    if (shown.current !== offset) {
+      shown.current = offset;
+      records.reload();
+    }
+  });
+  return (
+    <>
+      <h4>Billing history</h4>
+      {records.status === "loading" && <Loading label="Loading billing history…" />}
+      {records.status === "error" && <><Notice>{describeError(records.error)}</Notice><button type="button" onClick={records.reload}>Try again</button></>}
+      {records.status === "ready" && records.data.items.length === 0 && <p>There are no billing records. No payment provider is configured, so none is created and nothing has been charged.</p>}
+      {records.status === "ready" && records.data.items.length > 0 && (
+        <table>
+          <caption>Billing records (application records, not tax invoices or payment receipts)</caption>
+          <thead><tr><th scope="col">Date</th><th scope="col">Description</th><th scope="col">Amount</th><th scope="col">Record status</th><th scope="col">Payment</th></tr></thead>
+          <tbody>
+            {records.data.items.map((r) => (
+              <tr key={r.id}>
+                <td>{r.created_at.slice(0, 10)}</td>
+                <td>{r.description}</td>
+                <td>{formatMoney(r.amount, r.currency)}</td>
+                <td>{humanizeType(r.status)}</td>
+                <td>{r.payment_confirmed ? `Confirmed by ${r.provider} (reference ${r.provider_reference})` : r.status === "PAYMENT_FAILED" ? `Payment failed${r.payment_attempts[0] ? ` (${r.payment_attempts[0].failure_code})` : ""}` : "Not confirmed"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {records.status === "ready" && records.data.total > pageSize && (
+        <div className="filters" role="group" aria-label="Billing history pages">
+          <button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - pageSize))}>Previous</button>
+          <span>{offset + 1}-{Math.min(offset + pageSize, records.data.total)} of {records.data.total}</span>
+          <button type="button" disabled={offset + pageSize >= records.data.total} onClick={() => setOffset(offset + pageSize)}>Next</button>
+        </div>
+      )}
+    </>
+  );
+}
+
 function BillingSection({ isOwner }: { isOwner: boolean }) {
   const finance = useFinance();
   const overview = useResource((signal) => finance.get<BillingOverview>("/finance-billing", signal));
-  const records = useResource((signal) => finance.get<{ items: BillingRecord[]; total: number }>("/finance-billing/records?limit=20", signal));
   const [name, setName] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,27 +101,7 @@ function BillingSection({ isOwner }: { isOwner: boolean }) {
           {isOwner ? <button type="submit">Save contact</button> : <Notice kind="info">Only the workspace Owner can change the billing contact.</Notice>}
         </div>
       </form>
-      <h4>Billing history</h4>
-      {records.status === "loading" && <Loading label="Loading billing history…" />}
-      {records.status === "error" && <><Notice>{describeError(records.error)}</Notice><button type="button" onClick={records.reload}>Try again</button></>}
-      {records.status === "ready" && records.data.items.length === 0 && <p>There are no billing records. No payment provider is configured, so none is created and nothing has been charged.</p>}
-      {records.status === "ready" && records.data.items.length > 0 && (
-        <table>
-          <caption>Billing records (application records, not tax invoices or payment receipts)</caption>
-          <thead><tr><th scope="col">Date</th><th scope="col">Description</th><th scope="col">Amount</th><th scope="col">Record status</th><th scope="col">Payment</th></tr></thead>
-          <tbody>
-            {records.data.items.map((r) => (
-              <tr key={r.id}>
-                <td>{r.created_at.slice(0, 10)}</td>
-                <td>{r.description}</td>
-                <td>{formatMoney(r.amount, r.currency)}</td>
-                <td>{humanizeType(r.status)}</td>
-                <td>{r.payment_confirmed ? `Confirmed by ${r.provider} (reference ${r.provider_reference})` : r.status === "PAYMENT_FAILED" ? `Payment failed${r.payment_attempts[0] ? ` (${r.payment_attempts[0].failure_code})` : ""}` : "Not confirmed"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <BillingRecords />
     </section>
   );
 }

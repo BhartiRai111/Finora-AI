@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FinanceProvider } from "@/lib/FinanceContext";
@@ -212,24 +212,77 @@ describe("assistant", () => {
     for (const bad of ["1e3", "1,5", "10%", ".5", "1.234", "--1", "1001", "-100.01"]) expect(percentProblem(bad, "x")).not.toBeNull();
   });
 
-  it("waits for the latest answer when requests overlap", async () => {
-    let first: (() => void) | undefined;
-    let call = 0;
+  it("sends one request while another is running, so a double click or Enter cannot ask twice", async () => {
+    let release: (() => void) | undefined;
+    let calls = 0;
     mockApi({
       ...base,
       "POST /v1/spaces/p1/finance-assistant/ask": () => {
-        call += 1;
-        if (call === 1) return new Promise((resolve) => { first = () => resolve({ status: 200, body: { ...ANSWER, summary: "OLD ANSWER" } }); });
-        return { status: 200, body: { ...ANSWER, summary: "NEW ANSWER" } };
+        calls += 1;
+        return new Promise((resolve) => { release = () => resolve({ status: 200, body: { ...ANSWER, summary: "ONLY ANSWER" } }); });
       },
     });
     wrap(<AssistantPanel domain="PERSONAL" />);
     const box = await screen.findByLabelText("Your question");
     await userEvent.type(box, "spend last month");
-    await userEvent.click(screen.getByRole("button", { name: "How much did I spend last month?" }));
-    await userEvent.click(screen.getByRole("button", { name: "How much did I spend last month?" }));
-    expect(await screen.findByText("NEW ANSWER")).toBeInTheDocument();
-    first!();
-    await waitFor(() => expect(screen.queryByText("OLD ANSWER")).not.toBeInTheDocument());
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    const example = screen.getByRole("button", { name: "How much did I spend last month?" });
+    expect(example).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeDisabled();
+    await userEvent.click(example);
+    await userEvent.click(screen.getByRole("button", { name: "Explain the spending change" }));
+    expect(calls).toBe(1);
+    release!();
+    expect(await screen.findByText("ONLY ANSWER")).toBeInTheDocument();
+    expect(screen.getByText(/Understood as:/)).toBeInTheDocument();
+  });
+
+  it("sends the chosen currency with an explanation request and shows each section's currency", async () => {
+    const seen: string[] = [];
+    mockApi({
+      ...base,
+      "GET /v1/spaces/p1/finance-assistant/expense-change?currency=USD": () => { seen.push("usd"); return { status: 200, body: { ...ANSWER, sections: [{ title: "Change", kind: "VERIFIED", currency: "USD", columns: ["Category", "Change"], rows: [["Food", "10.00"]], notes: [] }] } }; },
+    });
+    wrap(<AssistantPanel domain="PERSONAL" />);
+    await userEvent.selectOptions(await screen.findByLabelText("Currency"), "USD");
+    await userEvent.click(screen.getByRole("button", { name: "Explain the spending change" }));
+    expect(await screen.findByText(/Verified from your records; USD/)).toBeInTheDocument();
+    expect(seen).toEqual(["usd"]);
+  });
+
+  it("states the read-only guarantee, the limits and that no AI model wrote the answers when none is configured", async () => {
+    mockApi(base);
+    wrap(<AssistantPanel domain="PERSONAL" />);
+    expect(await screen.findByText(/Read-only: the assistant cannot change, pay, file or cancel anything/)).toBeInTheDocument();
+    expect(screen.getByText(/no AI model wrote them/)).toBeInTheDocument();
+  });
+
+  it("never renders a reply it cannot read: an unexpected shape becomes a plain error with a retry", async () => {
+    mockApi({ ...base, "POST /v1/spaces/p1/finance-assistant/ask": () => ({ status: 200, body: { unexpected: true, sections: "not a list" } }) });
+    wrap(<AssistantPanel domain="PERSONAL" />);
+    await userEvent.type(await screen.findByLabelText("Your question"), "spend last month");
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("reply this page cannot read");
+    expect(screen.queryByRole("region", { name: "Assistant answer" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  it("shows a refused request (role, plan or entitlement) as a refusal in the server's plain words", async () => {
+    mockApi({ ...base, "POST /v1/spaces/p1/finance-assistant/ask": () => problem(403, "FORBIDDEN", "Your current plan does not include the assistant.") });
+    wrap(<AssistantPanel domain="PERSONAL" />);
+    await userEvent.type(await screen.findByLabelText("Your question"), "spend last month");
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Your current plan does not include the assistant.");
+  });
+
+  it("reaches the provider-unavailable state without hiding the verified figures", async () => {
+    const answer = { ...ANSWER, ai: { status: "UNAVAILABLE", reason: "TIMEOUT", provider: "test", message: "The AI provider did not respond in time. The figures are unaffected.", explanation: null, label: null } };
+    mockApi({ ...base, "POST /v1/spaces/p1/finance-assistant/ask": () => ({ status: 200, body: answer }) });
+    wrap(<AssistantPanel domain="PERSONAL" />);
+    await userEvent.type(await screen.findByLabelText("Your question"), "spend last month");
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByText(/INR: income 2000.00/)).toBeInTheDocument();
+    expect(screen.getByText(/AI explanations: provider unavailable/)).toBeInTheDocument();
+    expect(screen.queryByRole("note", { name: "AI explanation" })).toBeNull();
   });
 });

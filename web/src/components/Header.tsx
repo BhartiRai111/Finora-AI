@@ -17,6 +17,10 @@ export function Header() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [chosen, setChosen] = useState<string>("");
 
+  // A workspace created or joined since the list was loaded is not in it yet: the list is fetched again once when the page is on such a workspace.
+  const onPage = /^\/workspaces\/([^/]+)/.exec(pathname)?.[1];
+  const stale = Boolean(onPage) && workspaces.length > 0 && !workspaces.some((w) => w.id === onPage);
+
   useEffect(() => {
     if (state.status !== "ready") return;
     const controller = new AbortController();
@@ -29,7 +33,7 @@ export function Header() {
       })
       .catch(() => setWorkspaces([]));
     return () => controller.abort();
-  }, [state.status]);
+  }, [state.status, stale]);
 
   const visible = state.status === "ready" ? workspaces : [];
   // The page you are on wins over the remembered choice, so the switcher never disagrees with the screen.

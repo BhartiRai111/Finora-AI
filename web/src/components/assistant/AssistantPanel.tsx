@@ -2,8 +2,9 @@
 
 import { useRef, useState } from "react";
 import { describeError } from "@/lib/api";
-import { KIND_LABEL, percentProblem, type AssistantAi, type AssistantAnswer, type AssistantStatus } from "@/lib/assistant";
+import { KIND_LABEL, isReadableAnswer, percentProblem, type AssistantAi, type AssistantAnswer, type AssistantStatus } from "@/lib/assistant";
 import { useFinance } from "@/lib/FinanceContext";
+import { CURRENCIES } from "@/lib/finance";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
 
@@ -33,6 +34,7 @@ export function AnswerView({ answer }: { answer: AssistantAnswer }) {
       {answer.status === "UNSUPPORTED" && <Notice kind="info">{answer.summary}</Notice>}
       {answer.status === "NO_DATA" && <Notice kind="info">{answer.summary}</Notice>}
       {answer.status === "ANSWERED" && <p><strong>{answer.summary}</strong></p>}
+      <p className="muted">Understood as: {humanizeIntent(answer.intent)}. Figures below are calculated by the server from recorded data; nothing was changed.</p>
       {answer.period?.label && (
         <p className="muted">
           Period: {answer.period.label}
@@ -44,7 +46,7 @@ export function AnswerView({ answer }: { answer: AssistantAnswer }) {
         <div key={`${s.title}-${i}`} className="column">
           <table>
             <caption>
-              {s.title} <span className="muted">({KIND_LABEL[s.kind]})</span>
+              {s.title} <span className="muted">({KIND_LABEL[s.kind]}{s.currency ? `; ${s.currency}` : ""})</span>
             </caption>
             <thead>
               <tr>{s.columns.map((c) => <th key={c} scope="col">{c}</th>)}</tr>
@@ -86,6 +88,8 @@ export function AnswerView({ answer }: { answer: AssistantAnswer }) {
   );
 }
 
+const humanizeIntent = (intent: string): string => intent.toLowerCase().replace(/_/g, " ");
+
 type Outcome = { state: "idle" } | { state: "loading" } | { state: "error"; message: string; retry: () => void } | { state: "done"; answer: AssistantAnswer };
 
 /** The assistant: ask a question about recorded data, explain a spending change, review potential anomalies, or try a what-if. Read-only. */
@@ -100,16 +104,24 @@ export function AssistantPanel({ domain }: { domain: "PERSONAL" | "BUSINESS" }) 
   const [expense, setExpense] = useState("");
   const [revenue, setRevenue] = useState("");
   const [horizon, setHorizon] = useState("3");
+  const [currency, setCurrency] = useState("");
   const seq = useRef(0);
+  const inFlight = useRef(false);
 
   async function call(make: () => Promise<AssistantAnswer>, retry: () => void) {
+    if (inFlight.current) return; // a second click or Enter while a request is running must not send another
+    inFlight.current = true;
     const mine = ++seq.current;
     setOutcome({ state: "loading" });
     try {
       const answer = await make();
-      if (mine === seq.current) setOutcome({ state: "done", answer });
+      if (mine !== seq.current) return;
+      if (!isReadableAnswer(answer)) setOutcome({ state: "error", message: "The server sent a reply this page cannot read, so nothing is shown. Please try again.", retry });
+      else setOutcome({ state: "done", answer });
     } catch (e) {
       if (mine === seq.current) setOutcome({ state: "error", message: describeError(e), retry });
+    } finally {
+      inFlight.current = false;
     }
   }
 
@@ -130,7 +142,10 @@ export function AssistantPanel({ domain }: { domain: "PERSONAL" | "BUSINESS" }) 
     const problem = dates();
     if (problem) return setLocalError(problem);
     setLocalError(null);
-    const qs = from && to ? `?from=${from}&to=${to}` : "";
+    const params = new URLSearchParams();
+    if (from && to) { params.set("from", from); params.set("to", to); }
+    if (currency) params.set("currency", currency);
+    const qs = params.size > 0 ? `?${params.toString()}` : "";
     void call(() => finance.get<AssistantAnswer>(`${path}${qs}`), () => dated(path));
   }
 
@@ -162,6 +177,11 @@ export function AssistantPanel({ domain }: { domain: "PERSONAL" | "BUSINESS" }) 
       {status.status === "ready" && (
         <>
           <Notice kind="info">{AI_TEXT[status.data.ai.status]}. {status.data.ai.message}</Notice>
+          <p className="muted">
+            {status.data.limits.read_only ? "Read-only: the assistant cannot change, pay, file or cancel anything. " : ""}
+            Up to {status.data.limits.questions_per_hour} questions per hour per person; questions are at most {status.data.limits.question_max_chars} characters.
+            {status.data.ai.status === "NOT_CONFIGURED" ? " Answers come from fixed calculations on your records; no AI model wrote them." : ""}
+          </p>
           <form onSubmit={(e) => { e.preventDefault(); ask(); }} aria-label="Ask a question">
             <label htmlFor="assistant-question">Your question</label>
             <textarea id="assistant-question" rows={2} maxLength={status.data.limits.question_max_chars} value={question} onChange={(e) => setQuestion(e.target.value)} />
@@ -169,7 +189,7 @@ export function AssistantPanel({ domain }: { domain: "PERSONAL" | "BUSINESS" }) 
           </form>
           <div role="group" aria-label="Example questions">
             {status.data.supported.map((s) => (
-              <button key={s.tool} type="button" className="link" onClick={() => { setQuestion(s.example); ask(s.example); }}>{s.example}</button>
+              <button key={s.tool} type="button" className="link" disabled={outcome.state === "loading"} onClick={() => { setQuestion(s.example); ask(s.example); }}>{s.example}</button>
             ))}
           </div>
         </>
@@ -180,6 +200,13 @@ export function AssistantPanel({ domain }: { domain: "PERSONAL" | "BUSINESS" }) 
         <div className="filters">
           <div className="column"><label htmlFor="assistant-from">From</label><input id="assistant-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
           <div className="column"><label htmlFor="assistant-to">To</label><input id="assistant-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div className="column">
+            <label htmlFor="assistant-currency">Currency</label>
+            <select id="assistant-currency" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+              <option value="">All currencies (each shown separately)</option>
+              {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
           <button type="button" onClick={() => dated("/finance-assistant/expense-change")} disabled={outcome.state === "loading"}>Explain the spending change</button>
           <button type="button" onClick={() => dated("/finance-assistant/anomalies")} disabled={outcome.state === "loading"}>Find potential anomalies</button>
         </div>

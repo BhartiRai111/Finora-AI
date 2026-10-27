@@ -217,6 +217,28 @@ class AssistantAiTest extends AssistantTestSupport {
     }
 
     @Test
+    void aProviderCannotInventAnExchangeRateOrAConvertedTotal() throws Exception {
+        Person p = person();
+        String inr = account(p, "Rupee", "BANK", "INR", "0.00", "2025-01-01");
+        String usd = account(p, "Dollar", "BANK", "USD", "0.00", "2025-01-01");
+        ok(tx(p, "EXPENSE", inr, "100.00", "2026-02-10", null));
+        ok(tx(p, "EXPENSE", usd, "10.00", "2026-02-11", null));
+        ok(post(p, "/finance-rates", Map.of("base_currency", "USD", "quote_currency", "INR", "rate", "83.0000", "rate_date", "2026-02-28")));
+        behaviour = r -> "{\"narrative\":\"At a rate of 85.5 the USD part is 855.00 in INR.\"}";
+        Resp invented = ask(p, "How much did I spend last month converted to INR?");
+        assertAnswered(invented);
+        assertThat(invented.body().path("ai").path("reason").asString()).isEqualTo("OUTPUT_REJECTED");
+        assertThat(invented.raw().body()).doesNotContain("855.00").doesNotContain("85.5");
+        assertThat(cell(section(invented, "USD converted to INR", "INR"), "Net spending (expenses minus refunds)")).isEqualTo("830.00");
+        behaviour = r -> "{\"narrative\":\"The combined figure is 930.00 after converting at 83.\"}";
+        Resp honest = ask(p, "How much did I spend last month converted to INR?");
+        assertThat(honest.body().path("ai").path("status").asString()).isEqualTo("EXECUTED");
+        for (AiProvider.Request req : SEEN) {
+            assertThat(req.data()).doesNotContain(p.space().toString()).doesNotContainIgnoringCase("rupee").doesNotContainIgnoringCase("dollar");
+        }
+    }
+
+    @Test
     void theStatusReportsTheProviderWithoutCallingIt() throws Exception {
         Person p = person();
         Resp s = get(p, "/finance-assistant");

@@ -81,7 +81,7 @@ question ─▶ QuestionRouter (fixed rules) ─▶ ToolRegistry (allowlist, arg
 * **Placement:** the assistant lives in the finance service (the owner of the data), like Step 18/19 features, behind the new gateway segment
   `finance-assistant`. The reserved `ai` prefix of the `intelligence` service is unchanged; moving the assistant there needs an approved internal
   contract (decision register, Step 20).
-* **Read-only tools** (allowlist of nine, see the table). Rejected before running: unknown names, tools of the other kind of workspace, unknown or
+* **Read-only tools** (allowlist of ten: the nine in the table plus `gst_summary`, see `docs/multi-currency-regional-gst.md`). Rejected before running: unknown names, tools of the other kind of workspace, unknown or
   identity-like arguments (`workspace_id`, `tenant_id`, `user_id`, `sql`, `url`, ...), non-scalar or over-long values. Workspace, user and role come only
   from the verified internal token; roles are enforced by the same permission matrix as reports (personal: Owner; business: reports read, with the Admin
   aggregate-only view; record-level tools need full reports access).

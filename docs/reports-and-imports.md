@@ -133,3 +133,8 @@ no revenue-recognition policy (accrual and cash are shown side by side); no sche
 FX conversion (PD-09); no retention policy engine or virus scanning (best-effort content checks only); single-instance local file storage unless an object-store
 implementation of `DocumentStorage` is added; an import commit runs inside the request (bounded at 5,000 rows) rather than in a separate worker; transfers are not
 reconcilable; list pages use limit and offset.
+
+
+## Reporting currency (Step 21)
+
+Any report can also be shown in a reporting currency beside its original per-currency figures (`GET /finance-reports/{name}/converted?reporting_currency=XXX`) and its CSV export can append a converted block. Rates are user-supplied, every rate used is listed with its date and source, a missing or stale rate makes that currency `UNAVAILABLE` and blocks any combined total, and forecasts are never converted. See `docs/multi-currency-regional-gst.md`.

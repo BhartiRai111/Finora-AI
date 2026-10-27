@@ -21,7 +21,8 @@ class RouteTableTest {
         for (String path : List.of("/finance-reports", "/finance-reports/cash-flow", "/finance-reports/cash-flow/export", "/finance-forecast", "/finance-imports", "/finance-imports/1/commit",
                 "/finance-imports/1/error-report", "/finance-documents", "/finance-documents/1/content", "/finance-documents/1/extract", "/finance-reconciliation/lines",
                 "/finance-reconciliation/lines/1/match", "/finance-reconciliation/summary", "/finance-assistant", "/finance-assistant/ask", "/finance-assistant/what-if", "/finance-assistant/anomalies",
-                "/finance-assistant/expense-change")) {
+                "/finance-assistant/expense-change", "/finance-regional", "/finance-regional/periods", "/finance-rates", "/finance-rates/lookup", "/finance-rates/1/void", "/finance-gst/summary",
+                "/finance-gst/invoices/1", "/finance-gst/export", "/finance-accounting", "/finance-accounting/sync-runs", "/finance-reports/cash-flow/converted")) {
             assertThat(owner(s + path)).as(path).isEqualTo("finance");
         }
         for (String path : List.of("/finance-imports", "/finance-imports/1/mapping", "/finance-documents", "/finance-documents/1/content")) {

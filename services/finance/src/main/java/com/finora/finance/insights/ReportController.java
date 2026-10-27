@@ -19,11 +19,13 @@ public class ReportController {
     private final InsightsAccess access;
     private final ReportService reports;
     private final ForecastService forecasts;
+    private final com.finora.finance.fx.ConversionService conversion;
 
-    public ReportController(InsightsAccess access, ReportService reports, ForecastService forecasts) {
+    public ReportController(InsightsAccess access, ReportService reports, ForecastService forecasts, com.finora.finance.fx.ConversionService conversion) {
         this.access = access;
         this.reports = reports;
         this.forecasts = forecasts;
+        this.conversion = conversion;
     }
 
     private static ReportService.Params params(String from, String to, String granularity, String compare, String compareFrom, String compareTo, String month, String asOf) {
@@ -50,10 +52,11 @@ public class ReportController {
     public ResponseEntity<byte[]> export(@PathVariable UUID space, @PathVariable String name, @RequestParam(required = false) String from, @RequestParam(required = false) String to,
             @RequestParam(required = false) String granularity, @RequestParam(required = false) String compare, @RequestParam(name = "compare_from", required = false) String compareFrom,
             @RequestParam(name = "compare_to", required = false) String compareTo, @RequestParam(required = false) String month,
-            @RequestParam(name = "as_of", required = false) String asOf, HttpServletRequest request) {
+            @RequestParam(name = "as_of", required = false) String asOf, @RequestParam(name = "reporting_currency", required = false) String reportingCurrency,
+            @RequestParam(name = "allow_stale", defaultValue = "false") boolean allowStale, HttpServletRequest request) {
         InsightsContext ctx = access.resolve(request, space);
         ReportService.Params p = params(from, to, granularity, compare, compareFrom, compareTo, month, asOf);
-        String csv = reports.exportCsv(ctx, name, p);
+        String csv = reportingCurrency == null || reportingCurrency.isBlank() ? reports.exportCsv(ctx, name, p) : conversion.exportCsv(ctx, name, p, reportingCurrency, allowStale);
         ReportModel.Report r = reports.report(ctx, name, p);
         return ResponseEntity.ok().contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + ReportService.fileName(name, r) + "\"")

@@ -26,9 +26,9 @@ class ToolRegistryTest {
     }
 
     @Test
-    void onlyTheNineReadOnlyToolsExistAndNoneIsAWriter() {
+    void onlyTheTenReadOnlyToolsExistAndNoneIsAWriter() {
         assertThat(ToolRegistry.TOOLS.keySet()).containsExactly("period_summary", "top_categories", "expense_change", "cash_flow_trend", "anomalies", "forecast", "what_if",
-                "overdue_invoices", "project_profitability");
+                "overdue_invoices", "gst_summary", "project_profitability");
         assertThat(ToolRegistry.TOOLS.keySet()).noneMatch(n -> n.matches(".*(create|delete|update|pay|send|cancel|write|set|import|void|issue).*"));
     }
 
@@ -63,7 +63,7 @@ class ToolRegistryTest {
         assertThatThrownBy(() -> ToolRegistry.validate(ctx(false), "overdue_invoices", Map.of())).isInstanceOf(Rejected.class).hasMessageContaining("not available");
         assertThatThrownBy(() -> ToolRegistry.validate(ctx(false), "project_profitability", Map.of())).isInstanceOf(Rejected.class);
         assertThat(ToolRegistry.validate(ctx(true), "overdue_invoices", Map.of()).name()).isEqualTo("overdue_invoices");
-        assertThat(ToolRegistry.available(ctx(false))).extracting(ToolRegistry.Spec::name).doesNotContain("overdue_invoices", "project_profitability");
-        assertThat(ToolRegistry.available(ctx(true))).hasSize(9);
+        assertThat(ToolRegistry.available(ctx(false))).extracting(ToolRegistry.Spec::name).doesNotContain("overdue_invoices", "project_profitability", "gst_summary");
+        assertThat(ToolRegistry.available(ctx(true))).hasSize(10);
     }
 }

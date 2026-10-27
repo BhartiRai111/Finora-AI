@@ -32,7 +32,7 @@ final class ToolRegistry {
     static final Map<String, Spec> TOOLS = new LinkedHashMap<>();
 
     static {
-        add("period_summary", Set.of("from", "to", "currency"), true, true, false, "How much did I spend last month?");
+        add("period_summary", Set.of("from", "to", "currency", "reporting_currency"), true, true, false, "How much did I spend last month?");
         add("top_categories", Set.of("from", "to", "limit", "currency"), true, true, false, "What are my top spending categories this year?");
         add("expense_change", Set.of("from", "to", "currency"), true, true, false, "Why did my expenses rise compared with the previous period?");
         add("cash_flow_trend", Set.of("months", "currency"), true, true, false, "How did my cash flow change over the last 3 months?");
@@ -41,6 +41,7 @@ final class ToolRegistry {
         add("what_if", Set.of("expense_change_percent", "revenue_change_percent", "horizon_months", "lookback_months"), true, true, false,
                 "What if my expenses increase by 10%?");
         add("overdue_invoices", Set.of(), false, true, false, "Which invoices are overdue?");
+        add("gst_summary", Set.of("from", "to"), false, true, false, "Show my GST summary for last month");
         add("project_profitability", Set.of("from", "to", "order", "limit"), false, true, false, "Which projects have the lowest profit?");
     }
 

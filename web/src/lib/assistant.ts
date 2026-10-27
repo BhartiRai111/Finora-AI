@@ -1,6 +1,6 @@
 // Shapes returned by the finance-assistant API. Every figure is a string computed by the backend; the browser never calculates or edits them.
 
-export type AssistantKind = "VERIFIED" | "ESTIMATE" | "HYPOTHETICAL" | "OBSERVATION";
+export type AssistantKind = "VERIFIED" | "ESTIMATE" | "HYPOTHETICAL" | "OBSERVATION" | "CONVERTED";
 export type AssistantSection = { title: string; kind: AssistantKind; currency: string | null; columns: string[]; rows: string[][]; notes: string[] };
 export type AssistantAi = {
   status: "NOT_CONFIGURED" | "CONFIGURED" | "UNAVAILABLE" | "FAILED" | "EXECUTED" | "SKIPPED" | "BLOCKED";
@@ -36,6 +36,7 @@ export const KIND_LABEL: Record<AssistantKind, string> = {
   ESTIMATE: "Estimate (not an actual result)",
   HYPOTHETICAL: "Hypothetical (your assumptions, not saved)",
   OBSERVATION: "Potential anomaly (for you to review)",
+  CONVERTED: "Converted from verified figures at the stated rates",
 };
 
 /** What the person typed for a percentage: a number from -100 to 1000 with at most 2 decimals, or an error text. */

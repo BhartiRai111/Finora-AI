@@ -47,11 +47,15 @@ class AssistantTools {
     private final ReportService reports;
     private final ForecastService forecasts;
     private final AssistantQueries queries;
+    private final com.finora.finance.fx.ConversionService conversion;
+    private final com.finora.finance.gst.GstService gst;
 
-    AssistantTools(ReportService reports, ForecastService forecasts, AssistantQueries queries) {
+    AssistantTools(ReportService reports, ForecastService forecasts, AssistantQueries queries, com.finora.finance.fx.ConversionService conversion, com.finora.finance.gst.GstService gst) {
         this.reports = reports;
         this.forecasts = forecasts;
         this.queries = queries;
+        this.conversion = conversion;
+        this.gst = gst;
     }
 
     // ---------------------------------------------------------------- shared helpers
@@ -173,6 +177,7 @@ class AssistantTools {
             case "forecast" -> forecast(ctx, call);
             case "what_if" -> whatIf(ctx, call);
             case "overdue_invoices" -> overdueInvoices(ctx);
+            case "gst_summary" -> gstSummary(ctx, call);
             case "project_profitability" -> projectProfitability(ctx, call);
             default -> throw new ToolRegistry.Rejected("unknown tool");
         };
@@ -210,8 +215,41 @@ class AssistantTools {
         }
         List<String> assumptions = new ArrayList<>(defaultNote(r));
         assumptions.add("Figures are exact sums of recorded data in the workspace time zone, using the same definitions as the reports.");
-        return new ToolResult("ANSWERED", "From " + r.from() + " to " + r.to() + ": " + String.join(" ", lines), null, p, sections, assumptions,
-                List.of("Each currency is shown separately; nothing is converted.", "Only recorded data is included."), sources, 0);
+        List<String> limitations = new ArrayList<>(List.of("Only recorded data is included."));
+        String summary = "From " + r.from() + " to " + r.to() + ": " + String.join(" ", lines);
+        String reporting = call.args().get("reporting_currency");
+        if (reporting == null) {
+            limitations.add("Each currency is shown separately; nothing is converted.");
+        } else {
+            var conv = conversion.convert(ctx, name, params(r.from(), r.to(), null, null), reporting, false).conversion();
+            String target = conv.reportingCurrency();
+            sources = new ArrayList<>(sources);
+            sources.add(new Source("CONVERSION", name + " to " + target, r.from().toString(), r.to().toString(), null));
+            List<String> convLines = new ArrayList<>();
+            for (var cc : conv.currencies()) {
+                if ("UNAVAILABLE".equals(cc.status())) {
+                    sections.add(plain(new Section("Conversion of " + cc.currency() + " to " + target + ": unavailable", "CONVERTED", target, List.of("Measure", "Amount"), List.of(), List.of(cc.message()))));
+                    convLines.add(cc.currency() + " could not be converted to " + target + " (" + cc.message().split("\\.")[0] + ").");
+                    continue;
+                }
+                List<List<String>> rows = new ArrayList<>();
+                cc.totals().forEach((k, v) -> rows.add(List.of(label(k, k), v)));
+                List<String> rateNotes = new ArrayList<>();
+                cc.rows().forEach(row -> rateNotes.add(row.period() + ": rate " + row.rate().rate() + (row.rate().rateDate() == null ? "" : " dated " + row.rate().rateDate()) + " (" + row.rate().source() + ")"));
+                sections.add(plain(new Section(cc.currency() + " converted to " + target + (cc.status().equals("SAME") ? " (same currency)" : ""), "CONVERTED", target, List.of("Measure", "Amount in " + target), rows, rateNotes)));
+            }
+            if (conv.combinedTotals() != null) {
+                List<List<String>> rows = new ArrayList<>();
+                conv.combinedTotals().forEach((k, v) -> rows.add(List.of(label(k, k), v)));
+                sections.add(plain(new Section("Combined total in " + target, "CONVERTED", target, List.of("Measure", "Amount in " + target), rows, List.of("Sum of the converted figures above; every rate is listed."))));
+                convLines.add("Combined in " + target + ": " + String.join(", ", conv.combinedTotals().entrySet().stream().map(e -> label(e.getKey(), e.getKey()).split(" \\(")[0] + " " + e.getValue()).toList()) + ".");
+            } else if (conv.combinedUnavailableReason() != null) {
+                limitations.add(conv.combinedUnavailableReason());
+            }
+            summary = summary + " Converted view: " + String.join(" ", convLines);
+            limitations.addAll(conv.notes());
+        }
+        return new ToolResult("ANSWERED", summary, null, p, sections, assumptions, limitations, sources, 0);
     }
 
     // ---------------------------------------------------------------- top_categories
@@ -763,6 +801,40 @@ class AssistantTools {
         return new ToolResult("ANSWERED", "From " + r.from() + " to " + r.to() + ": " + String.join(" ", lines), null, p, sections,
                 List.of("Profit = net invoiced revenue minus posted expenses linked to the project, dated within the period.", "Costs not linked to a project are not included in any project."),
                 List.of("Each currency is shown separately; nothing is converted.", "Only projects with revenue or costs in the period appear."), sources, (int) suspicious);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ToolResult gstSummary(InsightsContext ctx, ToolCall call) {
+        Range r = range(ctx, call);
+        Map<String, Object> sum = gst.summary(ctx, r.from().toString(), r.to().toString());
+        Map<String, Object> sales = (Map<String, Object>) sum.get("sales");
+        Map<String, Object> purchases = (Map<String, Object>) sum.get("purchases");
+        Map<String, Object> rec = (Map<String, Object>) sum.get("reconciliation");
+        List<String> flags = (List<String>) sum.get("flags");
+        Period p = period(r, windowLabel(r));
+        List<Source> sources = List.of(new Source("GST_SUMMARY", "finance-gst summary", r.from().toString(), r.to().toString(), null));
+        int salesCount = (Integer) sales.get("invoices_included");
+        int purchaseCount = (Integer) purchases.get("expenses_included");
+        List<String> limitations = new ArrayList<>((List<String>) sum.get("limitations"));
+        limitations.add(com.finora.finance.gst.GstService.NOTICE);
+        limitations.add("This is a read-only summary. Nothing was filed, submitted or declared, and the assistant cannot do that.");
+        limitations.addAll(flags);
+        List<String> assumptions = new ArrayList<>(defaultNote(r));
+        assumptions.add("INR only; sales by invoice date and purchases by expense date; only records with saved GST details are included.");
+        if (salesCount == 0 && purchaseCount == 0) {
+            return new ToolResult("NO_DATA", "No invoice or expense with saved GST details falls between " + r.from() + " and " + r.to() + ", so there is no GST summary. Nothing was estimated or calculated.", null, p,
+                    List.of(), assumptions, limitations, sources, 0);
+        }
+        List<Built> sections = new ArrayList<>();
+        sections.add(plain(new Section("GST on sales in INR (" + salesCount + " invoice(s))", "VERIFIED", "INR", List.of("Measure", "Amount"),
+                List.of(List.of("Taxable amount", String.valueOf(sales.get("taxable_amount"))), List.of("CGST", String.valueOf(sales.get("cgst"))), List.of("SGST", String.valueOf(sales.get("sgst"))),
+                        List.of("IGST", String.valueOf(sales.get("igst"))), List.of("Total tax", String.valueOf(sales.get("total_tax")))), List.of())));
+        sections.add(plain(new Section("GST on purchases in INR (" + purchaseCount + " expense(s))", "VERIFIED", "INR", List.of("Measure", "Amount"),
+                List.of(List.of("Taxable amount", String.valueOf(purchases.get("taxable_amount"))), List.of("CGST", String.valueOf(purchases.get("cgst"))), List.of("SGST", String.valueOf(purchases.get("sgst"))),
+                        List.of("IGST", String.valueOf(purchases.get("igst"))), List.of("Total tax", String.valueOf(purchases.get("total_tax")))), List.of(String.valueOf(purchases.get("note"))))));
+        return new ToolResult("ANSWERED", "From " + r.from() + " to " + r.to() + " (INR): tax on sales " + sales.get("total_tax") + " (CGST " + sales.get("cgst") + ", SGST " + sales.get("sgst") + ", IGST "
+                + sales.get("igst") + ") on taxable " + sales.get("taxable_amount") + "; tax on purchases " + purchases.get("total_tax") + ". Sales reconciled to invoices: " + rec.get("sales_reconciled") + ".",
+                null, p, sections, assumptions, limitations, sources, 0);
     }
 
     private record ReportRowView(String name, Map<String, String> values) {

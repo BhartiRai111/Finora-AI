@@ -41,12 +41,14 @@ final class QuestionRouter {
     private static final Pattern SENSITIVE = Pattern.compile("(?i)api[\\s_-]?keys?|passwords?|secrets?|credentials?|session\\s+tokens?|\\btokens?\\b|private\\s+keys?|system\\s+prompt|"
             + "(ignore|disregard|forget|override)\\s+(all\\s+|any\\s+|the\\s+|your\\s+|previous\\s+|prior\\s+|above\\s+)*(instructions?|rules?|prompts?)|"
             + "(other|another|every|all)\\s+(users?|workspaces?|customers?|accounts?\\s+of\\s+others|tenants?)|someone\\s+else|\\bsql\\b|\\bshell\\b|\\bcurl\\b|\\bwget\\b|"
-            + "(delete|remove|drop|cancel|pay|transfer|send|edit|change|update|file)\\s+((my|the|all|every|a)\\s+)*(transactions?|invoices?|payments?|subscriptions?|budgets?|records?|taxes|tax|money)");
+            + "(delete|remove|drop|cancel|pay|transfer|send|edit|change|update|file)\\s+((my|the|all|every|a)\\s+)*(transactions?|invoices?|payments?|subscriptions?|budgets?|records?|taxes|tax|money)|"
+            + "(file|submit|lodge|e-?file|upload)\\s+((my|the|our|a|an|all)\\s+)*(gst|gstr[- ]?\\w*|returns?|tax\\s+returns?)|(sync|push|send|export)\\s+(my\\s+|the\\s+|all\\s+)*(data|books|invoices|transactions)\\s+(to|into|with)\\s+\\w+");
     private static final Pattern DATES = Pattern.compile("(\\d{4}-\\d{2}-\\d{2})");
     private static final Pattern LAST_N = Pattern.compile("(?:last|past|previous)\\s+(\\d{1,3})\\s+(day|week|month|year)s?");
     private static final Pattern MONTH_YEAR = Pattern.compile("\\b(?:in|during|for|of)\\s+(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec)\\b(?:\\s+(\\d{4}))?");
     private static final Pattern YEAR_ONLY = Pattern.compile("\\b(?:in|during|for|of)\\s+(20\\d{2})\\b");
     private static final Pattern PERCENT = Pattern.compile("(\\d+(?:\\.\\d{1,2})?)\\s*(?:%|percent|per\\s+cent)");
+    private static final Pattern CONVERT_TO = Pattern.compile("(?i)\\b(?:convert(?:ed)?|combined|in total|totals?)\\s+(?:all\\s+)?(?:(?:the\\s+)?(?:amounts?|figures?|currencies|it)\\s+)?(?:to|into|in)\\s+([a-z]{3})\\b");
     private static final Pattern CURRENCY_UPPER = Pattern.compile("\\b(?:in|currency)\\s+([A-Z]{3})\\b");
 
     private QuestionRouter() {
@@ -73,13 +75,17 @@ final class QuestionRouter {
             return new Routed(Kind.SENSITIVE, null, "I can only answer read-only questions about this workspace's recorded finance data. I cannot access credentials, other people's data, or change anything.");
         }
         Map<String, String> args = new LinkedHashMap<>();
-        Matcher cur = CURRENCY_UPPER.matcher(original);
+        Matcher conv = CONVERT_TO.matcher(original);
+        if (conv.find() && Currencies.supported(conv.group(1).toUpperCase(Locale.ROOT))) {
+            args.put("reporting_currency", conv.group(1).toUpperCase(Locale.ROOT));
+        }
+        Matcher cur = args.containsKey("reporting_currency") ? CURRENCY_UPPER.matcher("") : CURRENCY_UPPER.matcher(original);
         if (cur.find()) {
             if (!Currencies.supported(cur.group(1))) {
                 return Routed.clarify(cur.group(1) + " is not a supported currency. Supported: " + Currencies.codes() + ".");
             }
             args.put("currency", cur.group(1));
-        } else {
+        } else if (!args.containsKey("reporting_currency")) {
             for (String code : Currencies.codes()) {
                 if (Pattern.compile("\\b" + code.toLowerCase(Locale.ROOT) + "\\b").matcher(q).find()) {
                     args.put("currency", code);
@@ -93,8 +99,18 @@ final class QuestionRouter {
             return whatIf(q, args);
         }
         Routed result;
+        if (has(q, "tally", "quickbooks", "zoho", "xero", "accounting software", "accounting system", "accounting integration", "sync with", "sync to", "bookkeeping software")) {
+            return new Routed(Kind.UNSUPPORTED, null, "No accounting provider is approved or configured, so nothing can be synchronised or sent to an accounting system, and I cannot do that. "
+                    + "I can answer read-only questions about your recorded finance data.");
+        }
+        if (has(q, "gst", "cgst", "sgst", "igst", "gstr")) {
+            if (!ctx.business()) {
+                return new Routed(Kind.UNSUPPORTED, null, "GST support exists only in business workspaces.");
+            }
+            return withPeriod("gst_summary", q, today, ctx.fiscalStartMonth(), new LinkedHashMap<>());
+        }
         if (has(q, "unusual", "anomal", "suspicious", "outlier", "strange", "odd transaction", "spike", "duplicate")) {
-            result = withPeriod("anomalies", q, today, args);
+            result = withPeriod("anomalies", q, today, ctx.fiscalStartMonth(), args);
         } else if (has(q, "forecast", "predict", "projection", "expect to", "next \\d+ months", "next month", "next few months", "going to (spend|earn|have)", "will i (spend|have|earn)")) {
             Matcher m = Pattern.compile("next (\\d+) months?").matcher(q);
             if (m.find()) {
@@ -121,9 +137,9 @@ final class QuestionRouter {
             if (m.find()) {
                 args.put("limit", m.group(1));
             }
-            result = withPeriod("project_profitability", q, today, args);
+            result = withPeriod("project_profitability", q, today, ctx.fiscalStartMonth(), args);
         } else if (has(q, "why", "explain", "reason", "what changed", "what caused", "compared (to|with)", "vs\\.? (the )?previous", "rose", "increase", "went up", "higher") && has(q, "expense", "spend", "cost", "outgoing")) {
-            result = withPeriod("expense_change", q, today, args);
+            result = withPeriod("expense_change", q, today, ctx.fiscalStartMonth(), args);
         } else if (has(q, "cash\\s?flow") && has(q, "change", "trend", "changed", "over the last", "past \\d+ months", "last \\d+ months")) {
             Matcher m = LAST_N.matcher(q);
             if (m.find() && m.group(2).equals("month")) {
@@ -135,9 +151,9 @@ final class QuestionRouter {
             if (m.find()) {
                 args.put("limit", m.group(1));
             }
-            result = withPeriod("top_categories", q, today, args);
+            result = withPeriod("top_categories", q, today, ctx.fiscalStartMonth(), args);
         } else if (has(q, "spend", "spent", "spending", "expense", "cost", "income", "earn", "revenue", "received", "invoiced", "cash\\s?flow", "net ")) {
-            result = withPeriod("period_summary", q, today, args);
+            result = withPeriod("period_summary", q, today, ctx.fiscalStartMonth(), args);
         } else {
             return new Routed(Kind.UNKNOWN, null, null);
         }
@@ -187,7 +203,7 @@ final class QuestionRouter {
 
     // ---------------------------------------------------------------- periods
 
-    private static Routed withPeriod(String tool, String q, LocalDate today, Map<String, String> args) {
+    private static Routed withPeriod(String tool, String q, LocalDate today, int fiscalStart, Map<String, String> args) {
         Matcher dates = DATES.matcher(q);
         java.util.List<String> found = new java.util.ArrayList<>();
         while (dates.find()) {
@@ -201,7 +217,7 @@ final class QuestionRouter {
         } else if (found.size() > 2) {
             return Routed.clarify("I found more than two dates. Give one start and one end date.");
         } else {
-            LocalDate[] r = phrase(q, today);
+            LocalDate[] r = phrase(q, today, fiscalStart);
             if (r != null && r.length == 0) {
                 return Routed.clarify("I could not tell which period you mean. Try \"last month\", \"this year\", \"last 3 months\" or \"from 2026-01-01 to 2026-01-31\".");
             }
@@ -214,8 +230,15 @@ final class QuestionRouter {
     }
 
     /** The resolved period, null when none was mentioned (the tool then uses the last complete month), or an empty array when a month name could not be placed. */
-    static LocalDate[] phrase(String q, LocalDate today) {
+    static LocalDate[] phrase(String q, LocalDate today, int fiscalStart) {
         YearMonth thisMonth = YearMonth.from(today);
+        if (q.contains("fiscal") || q.contains("financial year")) {
+            var presets = com.finora.finance.regional.FiscalPeriods.presets(today, fiscalStart);
+            String key = q.contains("last quarter") || q.contains("previous quarter") || (q.contains("quarter") && (q.contains("last") || q.contains("previous"))) ? "last_fiscal_quarter"
+                    : q.contains("quarter") ? "this_fiscal_quarter" : (q.contains("last") || q.contains("previous")) ? "last_fiscal_year" : "this_fiscal_year";
+            var range = presets.get(key);
+            return new LocalDate[] {range.from(), range.to()};
+        }
         if (q.contains("last month") || q.contains("previous month")) {
             YearMonth m = thisMonth.minusMonths(1);
             return new LocalDate[] {m.atDay(1), m.atEndOfMonth()};

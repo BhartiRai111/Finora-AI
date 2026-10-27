@@ -171,6 +171,7 @@ class AiGateway {
             t.put("currency", b.section().currency());
             t.put("columns", b.section().columns());
             t.put("rows", rows);
+            t.put("notes", b.section().notes());
             tables.add(t);
         }
         if (tables.isEmpty()) {

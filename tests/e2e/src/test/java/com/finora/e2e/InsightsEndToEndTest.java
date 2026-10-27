@@ -144,6 +144,19 @@ class InsightsEndToEndTest extends E2eBase {
         assertThat(refused.body().path("status").asString()).isEqualTo("UNSUPPORTED");
         assertThat(post(base + "/finance-assistant/what-if", u.token(), csrf(u), Map.of("expense_change_percent", "999999")).status()).isEqualTo(422);
 
+        // Step 21 through the gateway: regional settings, a user-supplied exchange rate (CSRF protected) and a report shown in a reporting currency
+        assertThat(get(base + "/finance-regional", u.token(), null).body().path("fiscal_year_start_month").asInt()).isEqualTo(1);
+        assertThat(send("PUT", base + "/finance-regional", u.token(), Map.of(), "{\"fiscal_year_start_month\":4}").status()).as("CSRF").isEqualTo(403);
+        assertThat(send("PUT", base + "/finance-regional", u.token(), csrf(u), "{\"fiscal_year_start_month\":4,\"locale\":\"en-IN\"}").body().path("fiscal_year_start_month").asInt()).isEqualTo(4);
+        assertThat(get(base + "/finance-rates/status", u.token(), null).body().path("automatic_source").path("status").asString()).isEqualTo("NOT_CONFIGURED");
+        Map<String, Object> rate = Map.of("base_currency", "USD", "quote_currency", "INR", "rate", "83.2150", "rate_date", "2026-03-10");
+        assertThat(post(base + "/finance-rates", u.token(), Map.of(), rate).status()).as("CSRF").isEqualTo(403);
+        assertThat(post(base + "/finance-rates", u.token(), csrf(u), rate).status()).isEqualTo(201);
+        Resp converted = get(base + "/finance-reports/cash-flow/converted?reporting_currency=INR&from=2026-03-01&to=2026-03-31", u.token(), null);
+        assertThat(converted.status()).as(converted.raw().body()).isEqualTo(200);
+        assertThat(converted.body().path("conversion").path("currencies").get(0).path("status").asString()).isEqualTo("SAME");
+        assertThat(get(base + "/finance-gst/summary", u.token(), null).status()).as("GST is business only").isEqualTo(409);
+
         // documents: binary upload and download through the gateway, content check, OCR honestly unavailable, deletion
         byte[] file = pdf(UUID.randomUUID().toString());
         HttpResponse<byte[]> doc = binary("POST", base + "/finance-documents?kind=RECEIPT&filename=till.pdf", u.token(), csrf(u), file, "application/octet-stream");
@@ -200,6 +213,13 @@ class InsightsEndToEndTest extends E2eBase {
         assertThat(binary("GET", base + "/finance-reports/business-performance/export", admin.token(), Map.of(), null, null).statusCode()).isEqualTo(403);
         assertThat(binary("GET", base + "/finance-reports/business-performance/export", accountant.token(), Map.of(), null, null).statusCode()).isEqualTo(200);
         assertThat(get(base + "/finance-assistant", accountant.token(), null).status()).isEqualTo(200);
+        assertThat(get(base + "/finance-accounting", owner.token(), null).body().path("provider").path("status").asString()).isEqualTo("NOT_CONFIGURED");
+        assertThat(send("PUT", base + "/finance-gst/registration", owner.token(), Map.of(), "{\"gst_registered\":true,\"gstin\":\"27AAPFU0939F1ZV\"}").status()).as("CSRF").isEqualTo(403);
+        assertThat(send("PUT", base + "/finance-gst/registration", owner.token(), csrf(owner), "{\"gst_registered\":true,\"gstin\":\"27AAPFU0939F1ZV\"}").status()).isEqualTo(200);
+        assertThat(get(base + "/finance-gst/summary?from=2026-03-01&to=2026-03-31", accountant.token(), null).body().path("sales").path("invoices_included").asInt()).isZero();
+        assertThat(get(base + "/finance-gst/registration", accountant.token(), null).body().path("gstin").asString()).as("masked for a role that cannot change it").contains("*");
+        assertThat(get(base + "/finance-gst/summary", viewer.token(), null).status()).isEqualTo(403);
+        assertThat(get(base + "/finance-accounting", viewer.token(), null).status()).isEqualTo(403);
         assertThat(get(base + "/finance-assistant/anomalies", admin.token(), null).status()).as("Admin: no record-level detail").isEqualTo(403);
         for (String path : List.of("/finance-reports/business-performance", "/finance-forecast", "/finance-assistant", "/finance-assistant/anomalies", "/finance-imports", "/finance-documents", "/finance-reconciliation/lines")) {
             Resp denied = get(base + path, viewer.token(), null);
@@ -211,7 +231,7 @@ class InsightsEndToEndTest extends E2eBase {
         assertThat(doc.statusCode()).isEqualTo(201);
 
         Login stranger = registerAndLogin(email());
-        for (String path : List.of("/finance-reports/business-performance", "/finance-assistant", "/finance-imports", "/finance-documents/" + json(doc).path("id").asString(), "/finance-reconciliation/summary")) {
+        for (String path : List.of("/finance-reports/business-performance", "/finance-assistant", "/finance-gst/summary", "/finance-accounting", "/finance-rates", "/finance-imports", "/finance-documents/" + json(doc).path("id").asString(), "/finance-reconciliation/summary")) {
             Resp r = get(base + path, stranger.token(), Map.of("X-Tenant-Id", space, "X-User-Role", "OWNER"));
             assertThat(r.status()).as("a non-member on " + path).isEqualTo(404);
         }

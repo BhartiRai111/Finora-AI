@@ -81,7 +81,7 @@ public final class RouteTable {
         // unchanged until an approved internal contract exists (decision register, Step 20).
         // Step 19: reports, forecasts, imports, documents and reconciliation are served by the finance service (the owner of the data they read
         // and write). Uploads (CSV, PDF, PNG, JPEG as application/octet-stream or text/csv) are accepted on the import and document routes only.
-        for (String s : List.of("finance-reports", "finance-forecast", "finance-reconciliation", "finance-assistant")) {
+        for (String s : List.of("finance-reports", "finance-forecast", "finance-reconciliation", "finance-assistant", "finance-regional", "finance-rates", "finance-gst", "finance-accounting")) {
             space(r, s, "finance");
         }
         for (String s : List.of("finance-imports", "finance-documents")) {

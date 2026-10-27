@@ -17,6 +17,10 @@ import { PaymentsPanel } from "./PaymentsPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { AccountingPanel } from "../accounting/AccountingPanel";
 import { GstPanel } from "../gst/GstPanel";
+import { AlertsPanel } from "../platform/AlertsPanel";
+import { AdminOverviewPanel, IntegrationRegistry } from "../platform/IntegrationRegistry";
+import { NotificationStrip, NotificationsPanel } from "../platform/NotificationsPanel";
+import { SubscriptionPanel } from "../platform/SubscriptionPanel";
 import { RegionalPanel } from "../regional/RegionalPanel";
 import { AssistantPanel } from "../assistant/AssistantPanel";
 import { DocumentsPanel } from "../insights/DocumentsPanel";
@@ -24,7 +28,7 @@ import { ImportsPanel } from "../insights/ImportsPanel";
 import { ReconcilePanel } from "../insights/ReconcilePanel";
 import { ReportsPanel } from "../insights/ReportsPanel";
 
-type Tab = "overview" | "invoices" | "payments" | "clients" | "vendors" | "projects" | "expenses" | "reports" | "imports" | "documents" | "reconcile" | "assistant" | "regional" | "gst" | "integrations" | "settings";
+type Tab = "overview" | "invoices" | "payments" | "clients" | "vendors" | "projects" | "expenses" | "reports" | "imports" | "documents" | "reconcile" | "assistant" | "regional" | "gst" | "integrations" | "notifications" | "alerts" | "plan" | "admin" | "settings";
 
 /** Business finance for one BUSINESS workspace. Every request is authorized again by the server. */
 export function BusinessApp({ workspace }: { workspace: Workspace }) {
@@ -57,6 +61,10 @@ function BusinessShell({ workspace }: { workspace: Workspace }) {
     { id: "regional", label: "Currency & region", show: insightsAccess.reports(role) },
     { id: "gst", label: "GST", show: insightsAccess.reports(role) },
     { id: "integrations", label: "Integrations", show: businessAccess.read(role) },
+    { id: "notifications", label: "Notifications", show: insightsAccess.reports(role) },
+    { id: "alerts", label: "Alerts", show: insightsAccess.reports(role) },
+    { id: "plan", label: "Plan & billing", show: insightsAccess.reports(role) },
+    { id: "admin", label: "Administration", show: businessAccess.settingsWrite(role) },
     { id: "settings", label: "Settings", show: full },
   ];
   const visible = tabs.filter((t) => t.show);
@@ -98,6 +106,7 @@ function BusinessShell({ workspace }: { workspace: Workspace }) {
   const currency = base.currency;
   return (
     <>
+      {insightsAccess.reports(role) && <NotificationStrip onOpen={() => setTab("notifications")} refreshKey={tick} />}
       <div role="tablist" aria-label="Business finance sections" className="tabs">
         {visible.map((t) => (
           <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} className={tab === t.id ? "tab active" : "tab"} onClick={() => setTab(t.id)}>
@@ -120,7 +129,11 @@ function BusinessShell({ workspace }: { workspace: Workspace }) {
         {tab === "assistant" && <AssistantPanel domain="BUSINESS" />}
         {tab === "regional" && <RegionalPanel />}
         {tab === "gst" && <GstPanel canEditRegistration={businessAccess.settingsWrite(role)} canEditDetails={businessAccess.write(role)} canExport={insightsAccess.exportReports(role)} />}
-        {tab === "integrations" && <AccountingPanel />}
+        {tab === "integrations" && <><IntegrationRegistry /><AccountingPanel /></>}
+        {tab === "notifications" && <NotificationsPanel onChanged={changed} />}
+        {tab === "alerts" && <AlertsPanel canEditSettings={businessAccess.settingsWrite(role)} />}
+        {tab === "plan" && <SubscriptionPanel isOwner={role === "OWNER"} canSeeAdmin={businessAccess.settingsWrite(role)} />}
+        {tab === "admin" && <AdminOverviewPanel />}
         {tab === "settings" && <BusinessSettingsPanel role={role} onSaved={changed} />}
       </section>
     </>

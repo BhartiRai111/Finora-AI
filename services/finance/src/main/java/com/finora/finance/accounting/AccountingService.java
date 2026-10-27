@@ -27,8 +27,10 @@ public class AccountingService {
     private final JdbcClient jdbc;
     private final AccountingProvider provider;
     private final TokenVault vault;
+    private final com.finora.finance.notifications.NotificationService notifications;
 
-    public AccountingService(JdbcClient jdbc, AccountingProvider provider, TokenVault vault) {
+    public AccountingService(JdbcClient jdbc, AccountingProvider provider, TokenVault vault, com.finora.finance.notifications.NotificationService notifications) {
+        this.notifications = notifications;
         this.jdbc = jdbc;
         this.provider = provider;
         this.vault = vault;
@@ -100,5 +102,20 @@ public class AccountingService {
         jdbc.sql("update accounting_sync_runs set status = :s, records_ok = :ok, records_failed = :f, attempts = :a, error_code = :c, error_message = :m, finished_at = :now where tenant_id = :t and id = :id")
                 .param("s", status).param("ok", ok).param("f", failed).param("a", attempts).param("c", errorCode).param("m", Redaction.safe(errorMessage))
                 .param("now", OffsetDateTime.ofInstant(clock.instant(), ZoneOffset.UTC)).param("t", tenantId).param("id", run).update();
+        // Failures and recovery are announced in the application only (administrators of the workspace); the text carries no provider payload or credential.
+        String provider = jdbc.sql("select provider from accounting_sync_runs where tenant_id = :t and id = :id").param("t", tenantId).param("id", run).query(String.class).single();
+        if ("FAILED".equals(status) || "PARTIAL".equals(status)) {
+            notifications.create(tenantId, clock, null, "SETTINGS", "INTEGRATION", "FAILED".equals(status) ? "CRITICAL" : "WARNING", "Accounting synchronisation " + status.toLowerCase(java.util.Locale.ROOT),
+                    "A synchronisation with " + provider + " " + (status.equals("FAILED") ? "failed" : "partly failed") + (errorCode == null ? "" : " (" + errorCode + ")") + ". Financial data in Finora is unaffected.",
+                    java.util.Map.of("run_id", run.toString(), "provider", provider, "status", status), "integration:" + run);
+        } else if ("SUCCEEDED".equals(status)) {
+            boolean earlierFailure = jdbc.sql("select count(*) from accounting_sync_runs where tenant_id = :t and provider = :p and status in ('FAILED', 'PARTIAL') and finished_at is not null and id <> :id and not exists "
+                    + "(select 1 from accounting_sync_runs s where s.tenant_id = :t and s.provider = :p and s.status = 'SUCCEEDED' and s.id <> :id and s.finished_at is not null and s.finished_at > accounting_sync_runs.finished_at)")
+                    .param("t", tenantId).param("p", provider).param("id", run).query(Long.class).single() > 0;
+            if (earlierFailure) {
+                notifications.create(tenantId, clock, null, "SETTINGS", "INTEGRATION", "INFO", "Accounting synchronisation recovered", "A synchronisation with " + provider + " succeeded after an earlier failure.",
+                        java.util.Map.of("run_id", run.toString(), "provider", provider), "integration:" + run);
+            }
+        }
     }
 }

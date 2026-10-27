@@ -36,8 +36,10 @@ public class AssistantService {
     private final AssistantUsage usage;
     private final FinanceAudit audit;
     private final AiLimits limits;
+    private final com.finora.finance.subscriptions.Entitlements entitlements;
 
-    AssistantService(AssistantTools tools, AiGateway gateway, AssistantUsage usage, FinanceAudit audit, AiLimits limits) {
+    AssistantService(AssistantTools tools, AiGateway gateway, AssistantUsage usage, FinanceAudit audit, AiLimits limits, com.finora.finance.subscriptions.Entitlements entitlements) {
+        this.entitlements = entitlements;
         this.tools = tools;
         this.gateway = gateway;
         this.usage = usage;
@@ -56,6 +58,7 @@ public class AssistantService {
 
     public Answer ask(InsightsContext ctx, String rawQuestion) {
         ctx.requireReports();
+        entitlements.require(ctx, "assistant");
         String question = QuestionRouter.validate(rawQuestion);
         usage.enforceQuestionLimit(ctx);
         Routed routed = QuestionRouter.route(ctx, question);
@@ -98,6 +101,7 @@ public class AssistantService {
     /** One tool with explicit arguments. Bad arguments are a 422, as for any other API. */
     public Answer run(InsightsContext ctx, String tool, Map<String, ?> args) {
         ctx.requireReports();
+        entitlements.require(ctx, "assistant");
         usage.enforceQuestionLimit(ctx);
         ToolCall call;
         try {

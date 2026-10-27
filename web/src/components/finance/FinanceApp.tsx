@@ -16,6 +16,10 @@ import { GoalsPanel } from "./GoalsPanel";
 import { OverviewPanel } from "./OverviewPanel";
 import { RecurringPanel } from "./RecurringPanel";
 import { TransactionsPanel } from "./TransactionsPanel";
+import { AlertsPanel } from "../platform/AlertsPanel";
+import { IntegrationRegistry } from "../platform/IntegrationRegistry";
+import { NotificationStrip, NotificationsPanel } from "../platform/NotificationsPanel";
+import { SubscriptionPanel } from "../platform/SubscriptionPanel";
 import { RegionalPanel } from "../regional/RegionalPanel";
 import { AssistantPanel } from "../assistant/AssistantPanel";
 import { DocumentsPanel } from "../insights/DocumentsPanel";
@@ -39,6 +43,10 @@ const TABS = [
   ["reconcile", "Reconcile"],
   ["assistant", "Assistant"],
   ["regional", "Currency & region"],
+  ["notifications", "Notifications"],
+  ["alerts", "Alerts"],
+  ["plan", "Plan & billing"],
+  ["integrations", "Integrations"],
 ] as const;
 
 type TabId = (typeof TABS)[number][0];
@@ -67,6 +75,7 @@ export function FinanceApp() {
 function FinanceShell() {
   const finance = useFinance();
   const [tab, setTab] = useState<TabId>("overview");
+  const [unreadKey, setUnreadKey] = useState(0);
   const base = useResource(async (signal) => {
     const [a, c] = await Promise.all([
       finance.get<{ items: Account[] }>("/accounts?include_archived=true", signal),
@@ -89,6 +98,7 @@ function FinanceShell() {
   const needsAccount = ["transactions", "recurring"].includes(tab);
   return (
     <>
+      <NotificationStrip onOpen={() => setTab("notifications")} refreshKey={unreadKey} />
       <div role="tablist" aria-label="Finance sections" className="tabs">
         {TABS.map(([id, label]) => (
           <button key={id} role="tab" type="button" aria-selected={tab === id} className={tab === id ? "tab active" : "tab"} onClick={() => setTab(id)}>
@@ -115,6 +125,10 @@ function FinanceShell() {
         {tab === "reconcile" && <ReconcilePanel canWrite />}
         {tab === "assistant" && <AssistantPanel domain="PERSONAL" />}
         {tab === "regional" && <RegionalPanel />}
+        {tab === "notifications" && <NotificationsPanel onChanged={() => setUnreadKey((n) => n + 1)} />}
+        {tab === "alerts" && <AlertsPanel canEditSettings />}
+        {tab === "plan" && <SubscriptionPanel isOwner canSeeAdmin />}
+        {tab === "integrations" && <IntegrationRegistry />}
       </section>
     </>
   );

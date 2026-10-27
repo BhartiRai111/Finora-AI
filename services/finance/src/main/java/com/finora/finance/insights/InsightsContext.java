@@ -99,6 +99,15 @@ public record InsightsContext(Domain domain, UUID tenantId, UUID userId, Role ro
         }
     }
 
+    /** Company-settings level read: the personal owner, or full COMPANY_SETTINGS read in a business (administrative information such as integrations and subscriptions). */
+    public void requireSettingsRead() {
+        if (!business()) {
+            personalOwner();
+            return;
+        }
+        all(Resource.COMPANY_SETTINGS, Action.READ);
+    }
+
     /** Changing regional settings, exchange rates or GST registration: the personal owner, or full company-settings update rights. */
     public void requireSettingsWrite() {
         if (!business()) {

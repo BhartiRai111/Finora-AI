@@ -202,6 +202,34 @@ class InsightsEndToEndTest extends E2eBase {
         assertThat(post(base + "/finance-imports/" + job + "/commit", accountant.token(), csrf(accountant), Map.of("confirm", true, "possible_duplicates", "SKIP")).body().path("status").asString()).isEqualTo("COMPLETED");
         assertThat(get(base + "/expenses", owner.token(), null).body().path("total").asLong()).isEqualTo(1);
 
+        // Step 22: the import completion raised an in-app notification for the person who imported, with per-user read state
+        JsonNode notes = get(base + "/finance-notifications?unread_only=true", accountant.token(), null).body();
+        assertThat(notes.path("unread").asLong()).isGreaterThanOrEqualTo(1);
+        assertThat(notes.path("items").get(0).path("category").asString()).isEqualTo("IMPORT");
+        assertThat(notes.toString()).doesNotContain("E2E spend").doesNotContain("100.00");
+        String noteId = notes.path("items").get(0).path("id").asString();
+        assertThat(post(base + "/finance-notifications/" + noteId + "/read", accountant.token(), Map.of(), Map.of()).status()).as("CSRF").isEqualTo(403);
+        assertThat(post(base + "/finance-notifications/" + noteId + "/read", owner.token(), csrf(owner), Map.of()).status()).as("not visible to another user").isEqualTo(404);
+        assertThat(post(base + "/finance-notifications/" + noteId + "/read", accountant.token(), csrf(accountant), Map.of()).status()).isEqualTo(200);
+        assertThat(get(base + "/finance-notifications/unread-count", accountant.token(), null).body().path("unread").asLong()).isZero();
+        // plan, billing and integrations: the default plan is implicit, nothing external is configured, and only the Owner changes the plan
+        assertThat(get(base + "/finance-subscription", accountant.token(), null).body().path("status").asString()).isEqualTo("ACTIVE");
+        assertThat(post(base + "/finance-subscription/change", admin.token(), csrf(admin), Map.of("plan_key", "limited")).status()).as("only the Owner changes the plan").isEqualTo(403);
+        assertThat(post(base + "/finance-subscription/change", accountant.token(), csrf(accountant), Map.of("plan_key", "limited")).status()).isEqualTo(403);
+        assertThat(get(base + "/finance-billing", admin.token(), null).body().path("payments_enabled").asBoolean()).isFalse();
+        assertThat(get(base + "/finance-billing/records", admin.token(), null).body().path("total").asLong()).isZero();
+        JsonNode integrations = get(base + "/finance-integrations", admin.token(), null).body().path("items");
+        for (JsonNode i : integrations) {
+            assertThat(i.path("state").asString()).as("integration " + i.path("key").asString()).isNotEqualTo("CONNECTED");
+        }
+        assertThat(get(base + "/finance-admin/overview", admin.token(), null).body().path("scope").asString()).isEqualTo("WORKSPACE");
+        assertThat(post(base + "/finance-alerts/evaluate", accountant.token(), csrf(accountant), Map.of()).status()).isEqualTo(200);
+        assertThat(get(base + "/finance-alerts", accountant.token(), null).body().path("items").isArray()).isTrue();
+        for (String path : List.of("/finance-billing", "/finance-integrations", "/finance-admin/overview", "/finance-subscription", "/finance-alerts")) {
+            assertThat(get(base + path, viewer.token(), null).status()).as("a Viewer on " + path).isEqualTo(403);
+        }
+        assertThat(send("PUT", base + "/finance-alerts/settings/LOW_CASH", accountant.token(), csrf(accountant), "{\"enabled\":true}").status()).as("settings need company-settings rights").isEqualTo(403);
+
         JsonNode perf = get(base + "/finance-reports/business-performance?from=2026-03-01&to=2026-03-31", accountant.token(), null).body().path("currencies").get(0);
         assertThat(perf.path("totals").path("invoiced_net").asString()).isEqualTo("1000.00");
         assertThat(perf.path("totals").path("expenses").asString()).isEqualTo("100.00");
@@ -231,7 +259,7 @@ class InsightsEndToEndTest extends E2eBase {
         assertThat(doc.statusCode()).isEqualTo(201);
 
         Login stranger = registerAndLogin(email());
-        for (String path : List.of("/finance-reports/business-performance", "/finance-assistant", "/finance-gst/summary", "/finance-accounting", "/finance-rates", "/finance-imports", "/finance-documents/" + json(doc).path("id").asString(), "/finance-reconciliation/summary")) {
+        for (String path : List.of("/finance-reports/business-performance", "/finance-assistant", "/finance-gst/summary", "/finance-accounting", "/finance-rates", "/finance-notifications", "/finance-alerts", "/finance-subscription", "/finance-billing", "/finance-integrations", "/finance-documents/" + json(doc).path("id").asString(), "/finance-reconciliation/summary")) {
             Resp r = get(base + path, stranger.token(), Map.of("X-Tenant-Id", space, "X-User-Role", "OWNER"));
             assertThat(r.status()).as("a non-member on " + path).isEqualTo(404);
         }

@@ -77,7 +77,11 @@ public class DocumentService {
     private final ExpenseService expenses;
     private final TransactionService transactions;
 
-    public DocumentService(JdbcClient jdbc, DocumentStorage storage, OcrProvider ocr, ObjectMapper json, FinanceAudit audit, ExpenseService expenses, TransactionService transactions) {
+    private final com.finora.finance.subscriptions.Entitlements entitlements;
+
+    public DocumentService(JdbcClient jdbc, DocumentStorage storage, OcrProvider ocr, ObjectMapper json, FinanceAudit audit, ExpenseService expenses, TransactionService transactions,
+            com.finora.finance.subscriptions.Entitlements entitlements) {
+        this.entitlements = entitlements;
         this.jdbc = jdbc;
         this.storage = storage;
         this.ocr = ocr;
@@ -201,6 +205,7 @@ public class DocumentService {
 
     public Doc upload(InsightsContext ctx, String kindRaw, String filename, byte[] bytes) {
         Scope scope = ctx.documents(Action.CREATE);
+        entitlements.requireWithinLimit(ctx, "documents", jdbc.sql("select count(*) from finance_documents where tenant_id = :t and deleted_at is null").param("t", ctx.tenantId()).query(Long.class).single());
         String kind = kindRaw == null ? "OTHER" : kindRaw.trim().toUpperCase(Locale.ROOT);
         if (!KINDS.contains(kind)) {
             throw Validate.invalid("kind must be RECEIPT, INVOICE or OTHER");

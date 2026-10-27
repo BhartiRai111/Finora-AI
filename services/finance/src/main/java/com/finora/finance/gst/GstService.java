@@ -69,8 +69,10 @@ public class GstService {
 
     private final JdbcClient jdbc;
     private final FinanceAudit audit;
+    private final com.finora.finance.subscriptions.Entitlements entitlements;
 
-    public GstService(JdbcClient jdbc, FinanceAudit audit) {
+    public GstService(JdbcClient jdbc, FinanceAudit audit, com.finora.finance.subscriptions.Entitlements entitlements) {
+        this.entitlements = entitlements;
         this.jdbc = jdbc;
         this.audit = audit;
     }
@@ -217,6 +219,7 @@ public class GstService {
     @Transactional
     public InvoiceGst calculateInvoice(InsightsContext ctx, UUID invoiceId, InvoiceGstRequest req, boolean preview) {
         BusinessContext b = business(ctx);
+        entitlements.require(ctx, "gst");
         b.requireAll(Resource.INVOICES, Action.UPDATE);
         SettingsRow s = settings(ctx);
         if (!s.gstRegistered() || s.gstin() == null) {
@@ -358,6 +361,7 @@ public class GstService {
     @Transactional
     public ExpenseGst recordExpense(InsightsContext ctx, UUID expenseId, ExpenseGstRequest req) {
         BusinessContext b = business(ctx);
+        entitlements.require(ctx, "gst");
         b.requireAll(Resource.TRANSACTIONS, Action.UPDATE);
         SettingsRow s = settings(ctx);
         if (!s.gstRegistered() || s.gstin() == null) {
@@ -499,6 +503,7 @@ public class GstService {
 
     public Map<String, Object> summary(InsightsContext ctx, String fromRaw, String toRaw) {
         business(ctx);
+        entitlements.require(ctx, "gst");
         ctx.requireReports();
         Period p = period(ctx, fromRaw, toRaw);
         Registration reg = registration(ctx);
@@ -639,6 +644,7 @@ public class GstService {
 
     public Map<String, Object> transactions(InsightsContext ctx, String fromRaw, String toRaw) {
         business(ctx);
+        entitlements.require(ctx, "gst");
         ctx.requireFullReports();
         Period p = period(ctx, fromRaw, toRaw);
         return Map.of("format", FORMAT, "notice", NOTICE, "period", Map.of("from", p.from().toString(), "to", p.to().toString()), "rows", rows(ctx, p));
@@ -689,6 +695,7 @@ public class GstService {
 
     public String exportCsv(InsightsContext ctx, String fromRaw, String toRaw) {
         business(ctx);
+        entitlements.require(ctx, "gst");
         ctx.requireExport();
         Period p = period(ctx, fromRaw, toRaw);
         List<Map<String, String>> rows = rows(ctx, p);

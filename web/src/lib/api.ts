@@ -129,7 +129,8 @@ export function describeError(error: unknown): string {
     case "STEP_UP_REQUIRED":
       return "Please confirm your identity again to continue.";
     case "FORBIDDEN":
-      return "You do not have permission to do that.";
+      // A plan or subscription refusal explains itself ("Your current plan ... does not include ..."); anything else stays generic.
+      return error.detail?.startsWith("Your ") ? error.detail : "You do not have permission to do that.";
     case "NOT_FOUND":
       return "That could not be found, or you do not have access to it.";
     case "VALIDATION_FAILED":

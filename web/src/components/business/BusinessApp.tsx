@@ -15,12 +15,13 @@ import { loadLookups, NO_LOOKUPS, type Lookups } from "./lookups";
 import { PartiesPanel } from "./PartiesPanel";
 import { PaymentsPanel } from "./PaymentsPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
+import { AssistantPanel } from "../assistant/AssistantPanel";
 import { DocumentsPanel } from "../insights/DocumentsPanel";
 import { ImportsPanel } from "../insights/ImportsPanel";
 import { ReconcilePanel } from "../insights/ReconcilePanel";
 import { ReportsPanel } from "../insights/ReportsPanel";
 
-type Tab = "overview" | "invoices" | "payments" | "clients" | "vendors" | "projects" | "expenses" | "reports" | "imports" | "documents" | "reconcile" | "settings";
+type Tab = "overview" | "invoices" | "payments" | "clients" | "vendors" | "projects" | "expenses" | "reports" | "imports" | "documents" | "reconcile" | "assistant" | "settings";
 
 /** Business finance for one BUSINESS workspace. Every request is authorized again by the server. */
 export function BusinessApp({ workspace }: { workspace: Workspace }) {
@@ -49,6 +50,7 @@ function BusinessShell({ workspace }: { workspace: Workspace }) {
     { id: "imports", label: "Imports", show: insightsAccess.importsRead(role) },
     { id: "documents", label: "Documents", show: insightsAccess.documentsRead(role) },
     { id: "reconcile", label: "Reconcile", show: insightsAccess.importsRead(role) },
+    { id: "assistant", label: "Assistant", show: insightsAccess.reports(role) },
     { id: "settings", label: "Settings", show: full },
   ];
   const visible = tabs.filter((t) => t.show);
@@ -109,6 +111,7 @@ function BusinessShell({ workspace }: { workspace: Workspace }) {
         {tab === "imports" && <ImportsPanel domain="BUSINESS" canWrite={insightsAccess.importsWrite(role)} accounts={[]} />}
         {tab === "documents" && <DocumentsPanel domain="BUSINESS" canUpload={insightsAccess.documentsUpload(role)} canManage={insightsAccess.documentsManage(role)} accounts={[]} baseCurrency={currency} />}
         {tab === "reconcile" && <ReconcilePanel canWrite={insightsAccess.importsWrite(role)} />}
+        {tab === "assistant" && <AssistantPanel domain="BUSINESS" />}
         {tab === "settings" && <BusinessSettingsPanel role={role} onSaved={changed} />}
       </section>
     </>

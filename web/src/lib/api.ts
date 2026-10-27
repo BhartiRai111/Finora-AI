@@ -119,7 +119,7 @@ export function describeError(error: unknown): string {
     case "RATE_LIMITED":
       return error.retryAfterSeconds
         ? `Too many attempts. Try again in ${error.retryAfterSeconds} seconds.`
-        : "Too many attempts. Please wait and try again.";
+        : (error.detail ?? "Too many attempts. Please wait and try again.");
     case "AUTH_REQUIRED":
       return "Your session has ended. Please sign in again.";
     case "CSRF_INVALID":

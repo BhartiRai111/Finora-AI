@@ -16,6 +16,7 @@ import { GoalsPanel } from "./GoalsPanel";
 import { OverviewPanel } from "./OverviewPanel";
 import { RecurringPanel } from "./RecurringPanel";
 import { TransactionsPanel } from "./TransactionsPanel";
+import { AssistantPanel } from "../assistant/AssistantPanel";
 import { DocumentsPanel } from "../insights/DocumentsPanel";
 import { ImportsPanel } from "../insights/ImportsPanel";
 import { ReconcilePanel } from "../insights/ReconcilePanel";
@@ -35,6 +36,7 @@ const TABS = [
   ["imports", "Imports"],
   ["documents", "Documents"],
   ["reconcile", "Reconcile"],
+  ["assistant", "Assistant"],
 ] as const;
 
 type TabId = (typeof TABS)[number][0];
@@ -109,6 +111,7 @@ function FinanceShell() {
         {tab === "imports" && <ImportsPanel domain="PERSONAL" canWrite accounts={accounts} />}
         {tab === "documents" && <DocumentsPanel domain="PERSONAL" canUpload canManage accounts={accounts} baseCurrency="INR" />}
         {tab === "reconcile" && <ReconcilePanel canWrite />}
+        {tab === "assistant" && <AssistantPanel domain="PERSONAL" />}
       </section>
     </>
   );

@@ -20,13 +20,14 @@ class RouteTableTest {
     void reportsImportsDocumentsAndReconciliationAreFinanceRoutesAndOnlyImportsAndDocumentsTakeUploads() {
         for (String path : List.of("/finance-reports", "/finance-reports/cash-flow", "/finance-reports/cash-flow/export", "/finance-forecast", "/finance-imports", "/finance-imports/1/commit",
                 "/finance-imports/1/error-report", "/finance-documents", "/finance-documents/1/content", "/finance-documents/1/extract", "/finance-reconciliation/lines",
-                "/finance-reconciliation/lines/1/match", "/finance-reconciliation/summary")) {
+                "/finance-reconciliation/lines/1/match", "/finance-reconciliation/summary", "/finance-assistant", "/finance-assistant/ask", "/finance-assistant/what-if", "/finance-assistant/anomalies",
+                "/finance-assistant/expense-change")) {
             assertThat(owner(s + path)).as(path).isEqualTo("finance");
         }
         for (String path : List.of("/finance-imports", "/finance-imports/1/mapping", "/finance-documents", "/finance-documents/1/content")) {
             assertThat(table.match(s + path).orElseThrow().uploads()).as(path).isTrue();
         }
-        for (String path : List.of("/finance-reports/cash-flow", "/finance-forecast", "/finance-reconciliation/lines", "/clients", "/invoices")) {
+        for (String path : List.of("/finance-reports/cash-flow", "/finance-forecast", "/finance-reconciliation/lines", "/finance-assistant/ask", "/clients", "/invoices")) {
             assertThat(table.match(s + path).orElseThrow().uploads()).as(path).isFalse();
         }
         // the reserved prefixes of the not-yet-built services keep their owners

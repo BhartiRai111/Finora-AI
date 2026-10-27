@@ -67,6 +67,15 @@ public record InsightsContext(Domain domain, UUID tenantId, UUID userId, Role ro
         }
     }
 
+    /** Record-level detail (individual records behind a report): the personal owner, or REPORTS read with full scope (not the Admin aggregate-only view). */
+    public void requireFullReports() {
+        if (!business()) {
+            personalOwner();
+            return;
+        }
+        all(Resource.REPORTS, Action.READ);
+    }
+
     /** Exporting a report needs the export right (not just read). */
     public void requireExport() {
         if (!business()) {

@@ -1,5 +1,6 @@
 package com.finora.finance.insights;
 
+import com.finora.finance.assistant.AiProvider;
 import com.finora.finance.core.Validate;
 import com.finora.finance.money.Currencies;
 import java.math.BigDecimal;
@@ -50,9 +51,11 @@ public class ForecastService {
     }
 
     private final ReportService reports;
+    private final AiProvider ai;
 
-    public ForecastService(ReportService reports) {
+    public ForecastService(ReportService reports, AiProvider ai) {
         this.reports = reports;
+        this.ai = ai;
     }
 
     public Forecast forecast(InsightsContext ctx, String metricRaw, Integer lookbackRaw, Integer horizonRaw) {
@@ -151,6 +154,8 @@ public class ForecastService {
                         "No trend, seasonality, growth, known future invoices, bills or recurring items are modelled.",
                         "The range is the mean plus or minus one standard deviation of past months, an indicative spread and not a confidence interval.",
                         "Each currency is forecast on its own; nothing is converted."),
-                new AiExplanation("UNAVAILABLE", "No AI provider is configured, so there is no AI explanation. The numbers above are plain arithmetic on your recorded data."), out);
+                ai.configured()
+                        ? new AiExplanation("IN_ASSISTANT", "An AI provider is configured: ask the Assistant to explain this forecast. The numbers above are plain arithmetic on your recorded data and never use AI.")
+                        : new AiExplanation("UNAVAILABLE", "No AI provider is configured, so there is no AI explanation. The numbers above are plain arithmetic on your recorded data."), out);
     }
 }

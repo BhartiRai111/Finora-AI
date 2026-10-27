@@ -74,6 +74,7 @@ abstract class E2eBase {
         Map<String, String> financeEnv = new LinkedHashMap<>(common);
         financeEnv.put("SERVER_PORT", String.valueOf(financePort));
         financeEnv.put("FINORA_FINANCE_RECURRING_SCHEDULER_ENABLED", "false");
+        financeEnv.put("FINORA_FINANCE_DOCUMENTS_STORAGE_DIR", logDir.resolve("documents").toString());
         finance = launch(financeJar, financeEnv, logDir.resolve("finance.log"));
 
         Map<String, String> gatewayEnv = new LinkedHashMap<>(common);
@@ -155,6 +156,22 @@ abstract class E2eBase {
         }
         HttpResponse<String> r = HTTP.send(b.build(), HttpResponse.BodyHandlers.ofString());
         return new Resp(r.statusCode(), r.body().isEmpty() ? JSON.createObjectNode() : JSON.readTree(r.body()), r);
+    }
+
+    /** A request with a raw byte body through the gateway (an upload or a download). */
+    static HttpResponse<byte[]> binary(String method, String path, String sessionToken, Map<String, String> headers, byte[] body, String contentType) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + gatewayPort + path)).timeout(Duration.ofSeconds(60))
+                .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofByteArray(body));
+        if (body != null) {
+            b.header("Content-Type", contentType);
+        }
+        if (sessionToken != null) {
+            b.header("Cookie", COOKIE + "=" + sessionToken);
+        }
+        if (headers != null) {
+            headers.forEach(b::header);
+        }
+        return HTTP.send(b.build(), HttpResponse.BodyHandlers.ofByteArray());
     }
 
     static Process launch(Path jar, Map<String, String> env, Path log) throws IOException {

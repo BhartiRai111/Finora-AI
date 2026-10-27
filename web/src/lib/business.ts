@@ -205,3 +205,14 @@ export const businessAccess = {
   expensesCreate: (role: Role): boolean => WRITERS.includes(role) || role === "CONTRIBUTOR",
   settingsWrite: (role: Role): boolean => role === "OWNER" || role === "ADMIN",
 };
+
+// UI hints for reports, imports, documents and reconciliation (matrix rows REPORTS, IMPORTS_RECONCILIATION, DOCUMENTS). The server decides.
+export const insightsAccess = {
+  reports: (role: Role): boolean => FULL_READ.includes(role),
+  exportReports: (role: Role): boolean => role === "OWNER" || role === "ACCOUNTANT" || role === "AUDITOR",
+  importsRead: (role: Role): boolean => role === "OWNER" || role === "ACCOUNTANT" || role === "AUDITOR",
+  importsWrite: (role: Role): boolean => role === "OWNER" || role === "ACCOUNTANT",
+  documentsRead: (role: Role): boolean => role === "OWNER" || role === "ACCOUNTANT" || role === "AUDITOR" || role === "CONTRIBUTOR",
+  documentsUpload: (role: Role): boolean => role === "OWNER" || role === "ACCOUNTANT" || role === "CONTRIBUTOR",
+  documentsManage: (role: Role): boolean => role === "OWNER" || role === "ACCOUNTANT",
+};

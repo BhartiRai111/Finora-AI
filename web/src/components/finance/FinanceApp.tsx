@@ -16,6 +16,10 @@ import { GoalsPanel } from "./GoalsPanel";
 import { OverviewPanel } from "./OverviewPanel";
 import { RecurringPanel } from "./RecurringPanel";
 import { TransactionsPanel } from "./TransactionsPanel";
+import { DocumentsPanel } from "../insights/DocumentsPanel";
+import { ImportsPanel } from "../insights/ImportsPanel";
+import { ReconcilePanel } from "../insights/ReconcilePanel";
+import { ReportsPanel } from "../insights/ReportsPanel";
 
 const TABS = [
   ["overview", "Overview"],
@@ -27,6 +31,10 @@ const TABS = [
   ["bills", "Bills"],
   ["subscriptions", "Subscriptions"],
   ["categories", "Categories"],
+  ["reports", "Reports"],
+  ["imports", "Imports"],
+  ["documents", "Documents"],
+  ["reconcile", "Reconcile"],
 ] as const;
 
 type TabId = (typeof TABS)[number][0];
@@ -74,7 +82,7 @@ function FinanceShell() {
   }
   const { accounts, categories } = base.data;
   const open = accounts.filter((a) => !a.archived);
-  const needsAccount = tab !== "overview" && tab !== "accounts" && tab !== "categories" && tab !== "goals" && tab !== "budgets";
+  const needsAccount = ["transactions", "recurring"].includes(tab);
   return (
     <>
       <div role="tablist" aria-label="Finance sections" className="tabs">
@@ -97,6 +105,10 @@ function FinanceShell() {
         {tab === "bills" && <CommitmentsPanel kind="BILL" accounts={accounts} />}
         {tab === "subscriptions" && <CommitmentsPanel kind="SUBSCRIPTION" accounts={accounts} />}
         {tab === "categories" && <CategoriesPanel categories={categories} onChanged={base.reload} />}
+        {tab === "reports" && <ReportsPanel domain="PERSONAL" canExport />}
+        {tab === "imports" && <ImportsPanel domain="PERSONAL" canWrite accounts={accounts} />}
+        {tab === "documents" && <DocumentsPanel domain="PERSONAL" canUpload canManage accounts={accounts} baseCurrency="INR" />}
+        {tab === "reconcile" && <ReconcilePanel canWrite />}
       </section>
     </>
   );

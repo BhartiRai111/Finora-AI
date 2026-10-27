@@ -171,6 +171,46 @@ public abstract class FinanceTestSupport {
         return new Resp(r.statusCode(), r.body().isEmpty() ? json.createObjectNode() : json.readTree(r.body()), r);
     }
 
+    public record BinResp(int status, byte[] bytes, HttpResponse<byte[]> raw) {
+        public String header(String name) {
+            return raw.headers().firstValue(name).orElse(null);
+        }
+
+        public String text() {
+            return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+        }
+
+        public tools.jackson.databind.JsonNode json(ObjectMapper m) {
+            return m.readTree(bytes);
+        }
+    }
+
+    /** A request with a raw byte body (an upload) and a binary or text response. */
+    protected BinResp bytes(String method, String path, String bearer, byte[] body, String contentType, String... headers) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path)).timeout(Duration.ofSeconds(60))
+                .header("Authorization", "Bearer " + bearer)
+                .method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofByteArray(body));
+        if (body != null) {
+            b.header("Content-Type", contentType);
+        }
+        for (int i = 0; i < headers.length; i += 2) {
+            b.header(headers[i], headers[i + 1]);
+        }
+        HttpResponse<byte[]> r = http.send(b.build(), HttpResponse.BodyHandlers.ofByteArray());
+        return new BinResp(r.statusCode(), r.body(), r);
+    }
+
+    /** An upload whose response is JSON (a {@link Resp} like any other request). */
+    protected Resp upload(String path, String bearer, byte[] body, String contentType, String... headers) throws Exception {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://127.0.0.1:" + port + path)).timeout(Duration.ofSeconds(60))
+                .header("Authorization", "Bearer " + bearer).header("Content-Type", contentType).POST(HttpRequest.BodyPublishers.ofByteArray(body));
+        for (int i = 0; i < headers.length; i += 2) {
+            b.header(headers[i], headers[i + 1]);
+        }
+        HttpResponse<String> r = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+        return new Resp(r.statusCode(), r.body().isEmpty() ? json.createObjectNode() : json.readTree(r.body()), r);
+    }
+
     protected String base(Person p) {
         return "/v1/spaces/" + p.space();
     }

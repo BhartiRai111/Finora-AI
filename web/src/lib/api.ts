@@ -68,6 +68,46 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   return data as T;
 }
 
+async function failure(response: Response): Promise<ApiError> {
+  let data: { code?: string; detail?: string; retry_after_seconds?: number } = {};
+  try {
+    data = (await response.json()) as typeof data;
+  } catch {
+    data = {};
+  }
+  return new ApiError(response.status, data.code ?? "ERROR", data.detail, data.retry_after_seconds);
+}
+
+/** Uploads a file as the raw request body (the browser-provided type is never relied on by the server). */
+export async function apiUpload<T>(path: string, file: Blob, contentType: string, signal?: AbortSignal): Promise<T> {
+  const headers: Record<string, string> = { Accept: "application/json", "Content-Type": contentType };
+  if (csrfToken) headers["X-CSRF-Token"] = csrfToken;
+  let response: Response;
+  try {
+    response = await fetch(`${BASE}${path}`, { method: "POST", headers, body: file, credentials: "same-origin", cache: "no-store", signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new ApiError(0, "NETWORK", "Cannot reach the server");
+  }
+  if (!response.ok) throw await failure(response);
+  return (await response.json()) as T;
+}
+
+/** Fetches a file (CSV export, document) as a Blob together with the file name the server suggested. */
+export async function apiDownload(path: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string }> {
+  let response: Response;
+  try {
+    response = await fetch(`${BASE}${path}`, { method: "GET", credentials: "same-origin", cache: "no-store", signal });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new ApiError(0, "NETWORK", "Cannot reach the server");
+  }
+  if (!response.ok) throw await failure(response);
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const match = /filename="([^"\\]+)"/.exec(disposition);
+  return { blob: await response.blob(), filename: match?.[1] ?? "download" };
+}
+
 /** A message that is safe and useful to show. It never repeats server internals. */
 export function describeError(error: unknown): string {
   if (!(error instanceof ApiError)) return "Something went wrong. Please try again.";
@@ -95,6 +135,11 @@ export function describeError(error: unknown): string {
     case "VALIDATION_FAILED":
     case "CONFLICT":
     case "BAD_REQUEST":
+    case "ALLOCATION_EXCEEDS":
+    case "ALLOCATION_EXISTS":
+    case "INVOICE_IMMUTABLE":
+    case "INVALID_STATE_TRANSITION":
+    case "TOTAL_MISMATCH":
       return error.detail ?? "The request could not be completed.";
     case "IDEMPOTENCY_KEY_REUSED":
       return "That request was already used for something different. Please try again.";

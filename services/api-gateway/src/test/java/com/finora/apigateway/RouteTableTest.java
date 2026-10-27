@@ -17,6 +17,25 @@ class RouteTableTest {
     }
 
     @Test
+    void reportsImportsDocumentsAndReconciliationAreFinanceRoutesAndOnlyImportsAndDocumentsTakeUploads() {
+        for (String path : List.of("/finance-reports", "/finance-reports/cash-flow", "/finance-reports/cash-flow/export", "/finance-forecast", "/finance-imports", "/finance-imports/1/commit",
+                "/finance-imports/1/error-report", "/finance-documents", "/finance-documents/1/content", "/finance-documents/1/extract", "/finance-reconciliation/lines",
+                "/finance-reconciliation/lines/1/match", "/finance-reconciliation/summary")) {
+            assertThat(owner(s + path)).as(path).isEqualTo("finance");
+        }
+        for (String path : List.of("/finance-imports", "/finance-imports/1/mapping", "/finance-documents", "/finance-documents/1/content")) {
+            assertThat(table.match(s + path).orElseThrow().uploads()).as(path).isTrue();
+        }
+        for (String path : List.of("/finance-reports/cash-flow", "/finance-forecast", "/finance-reconciliation/lines", "/clients", "/invoices")) {
+            assertThat(table.match(s + path).orElseThrow().uploads()).as(path).isFalse();
+        }
+        // the reserved prefixes of the not-yet-built services keep their owners
+        assertThat(owner(s + "/reports/1")).isEqualTo("reporting");
+        assertThat(owner(s + "/imports/1")).isEqualTo("ingestion-integration");
+        assertThat(owner(s + "/documents/1")).isEqualTo("document");
+    }
+
+    @Test
     void routesToTheOwningService() {
         assertThat(owner("/v1/auth/login")).isEqualTo("identity-access");
         assertThat(owner("/v1/me")).isEqualTo("identity-access");
@@ -26,7 +45,9 @@ class RouteTableTest {
         assertThat(owner(s + "/invoices/9")).isEqualTo("finance");
         for (String segment : new String[] {"accounts", "transactions", "transfers", "categories", "tags", "recurring-rules", "budgets", "goals",
                 "subscriptions", "bills", "net-worth", "net-worth/series", "summaries/cashflow", "finance-settings", "transactions/1/void",
-                "bills/1/pay", "recurring-rules/run", "categories/starter"}) {
+                "bills/1/pay", "recurring-rules/run", "categories/starter", "clients", "clients/1/archive", "vendors", "projects", "projects/1",
+                "invoices", "invoices/1/issue", "payments", "payments/1/void", "expenses", "expense-categories", "business-settings",
+                "business-summaries/overview", "business-summaries/projects/1"}) {
             assertThat(owner(s + "/" + segment)).as(segment).isEqualTo("finance");
         }
         assertThat(owner(s + "/documents/1")).isEqualTo("document");

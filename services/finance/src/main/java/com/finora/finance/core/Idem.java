@@ -31,6 +31,11 @@ public class Idem {
 
     public ResponseEntity<String> run(HttpServletRequest request, FinanceContext ctx, Object requestBody, boolean required,
             HttpStatus status, Supplier<?> work) {
+        return run(request, ctx.tenantId(), requestBody, required, status, work);
+    }
+
+    public ResponseEntity<String> run(HttpServletRequest request, java.util.UUID tenantId, Object requestBody, boolean required,
+            HttpStatus status, Supplier<?> work) {
         String key = request.getHeader("Idempotency-Key");
         AtomicBoolean executed = new AtomicBoolean(false);
         Supplier<StoredResponse> producer = () -> {
@@ -44,7 +49,7 @@ public class Idem {
             }
             response = producer.get();
         } else {
-            String scope = ctx.tenantId() + ":" + request.getMethod() + ":" + request.getRequestURI();
+            String scope = tenantId + ":" + request.getMethod() + ":" + request.getRequestURI();
             String hash = IdempotencyService.hashRequest(request.getMethod(), request.getRequestURI(),
                     (requestBody == null ? "" : mapper.writeValueAsString(requestBody)).getBytes(java.nio.charset.StandardCharsets.UTF_8));
             response = idempotency.execute(scope, key, hash, producer);

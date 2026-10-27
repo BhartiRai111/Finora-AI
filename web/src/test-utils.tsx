@@ -4,7 +4,8 @@ import { vi } from "vitest";
 import { SessionProvider } from "@/lib/session";
 import type { User } from "@/lib/types";
 
-export type Handler = (init: { method: string; body: unknown; headers: Record<string, string> }) => { status: number; body?: unknown } | Promise<{ status: number; body?: unknown }>;
+export type HandlerResult = { status: number; body?: unknown; text?: string; headers?: Record<string, string> };
+export type Handler = (init: { method: string; body: unknown; headers: Record<string, string> }) => HandlerResult | Promise<HandlerResult>;
 
 export const USER: User = {
   id: "11111111-1111-4111-8111-111111111111",
@@ -25,12 +26,17 @@ export function mockApi(routes: Record<string, Handler>) {
     const key = `${method} ${url}`;
     const handler = routes[key];
     if (!handler) throw new Error(`Unexpected request: ${key}`);
-    const body = init?.body ? JSON.parse(String(init.body)) : undefined;
+    let body: unknown;
+    if (init?.body instanceof Blob) {
+      body = init.body; // an upload: the test inspects the file itself
+    } else if (init?.body) {
+      body = JSON.parse(String(init.body));
+    }
     const headers = (init?.headers ?? {}) as Record<string, string>;
     calls.push({ key, body, headers });
     const result = await handler({ method, body, headers });
-    const text = result.body === undefined ? "" : JSON.stringify(result.body);
-    return new Response(result.status === 204 ? null : text, { status: result.status });
+    const text = result.text ?? (result.body === undefined ? "" : JSON.stringify(result.body));
+    return new Response(result.status === 204 ? null : text, { status: result.status, headers: result.headers });
   });
   vi.stubGlobal("fetch", fn);
   return { calls, fn };

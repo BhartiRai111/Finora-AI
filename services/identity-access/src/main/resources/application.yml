@@ -51,3 +51,24 @@ finora:
       trusted-issuers:
         gateway:
           public-key-path: ${FINORA_KEYS_DIR:.dev-keys}/gateway.pub.pem
+  auth:
+    # Cookies are Secure by default. Set FINORA_COOKIE_SECURE=false ONLY for plain-HTTP local development.
+    cookie:
+      secure: ${FINORA_COOKIE_SECURE:true}
+      same-site: Lax
+    idle-timeout: ${FINORA_AUTH_IDLE_TIMEOUT:30m}
+    absolute-timeout: ${FINORA_AUTH_ABSOLUTE_TIMEOUT:12h}
+    step-up-ttl: 10m
+    mfa:
+      # base64 256-bit key file; without it MFA cannot be enrolled (tools/gen-dev-keys.sh creates one for development)
+      encryption-key-path: ${FINORA_MFA_KEY_PATH:${FINORA_KEYS_DIR:.dev-keys}/mfa.key}
+    touch-interval: ${FINORA_AUTH_TOUCH_INTERVAL:60s}
+    reset-token-ttl: 30m
+    lockout:
+      threshold: 5
+      base-delay: 30s
+      max-delay: 15m
+  workspaces:
+    web-base-url: ${FINORA_WEB_BASE_URL:http://localhost:3000}
+    # DEVELOPMENT ONLY: set to a file path to capture invitation links locally instead of emailing (no provider exists).
+    dev-outbox-file: ${FINORA_INVITATIONS_DEV_OUTBOX_FILE:}

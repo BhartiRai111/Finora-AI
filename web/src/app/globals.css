@@ -32,3 +32,37 @@ p {
   color: var(--muted);
   line-height: 1.5;
 }
+
+/* ---- application screens ---- */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.site-header { display: flex; flex-wrap: wrap; align-items: center; gap: 1rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--muted); }
+.site-header nav { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-left: auto; }
+.brand { font-weight: 700; color: var(--foreground); text-decoration: none; }
+main { max-width: 52rem; }
+form { display: grid; gap: 0.5rem; margin: 1.5rem 0; max-width: 28rem; }
+label { font-weight: 600; }
+input, select, button { font: inherit; padding: 0.5rem 0.75rem; border-radius: 0.375rem; border: 1px solid var(--muted); background: var(--background); color: var(--foreground); }
+button { cursor: pointer; font-weight: 600; }
+button[disabled] { opacity: 0.6; cursor: not-allowed; }
+button.link { border: 0; background: none; text-decoration: underline; padding: 0.25rem; }
+a { color: inherit; }
+.row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+.notice { padding: 0.6rem 0.8rem; border-radius: 0.375rem; border: 1px solid var(--muted); }
+.notice-error { border-color: #c0392b; }
+.notice-success { border-color: #1e8449; }
+.cards { list-style: none; padding: 0; display: grid; gap: 0.75rem; }
+.card { display: flex; justify-content: space-between; gap: 1rem; padding: 0.75rem 1rem; border: 1px solid var(--muted); border-radius: 0.5rem; }
+.badge { font-size: 0.85rem; color: var(--muted); }
+.tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0; }
+.tab[aria-selected="true"] { text-decoration: underline; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.5rem; border-bottom: 1px solid var(--muted); }
+.codes { columns: 2; list-style: none; padding: 0; }
+.filters { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; margin: 0.75rem 0; }
+.column { display: flex; flex-direction: column; gap: 0.25rem; }
+.muted { color: var(--muted); font-size: 0.9rem; }
+.voided { opacity: 0.6; text-decoration: line-through; }
+.status { font-weight: 600; }
+.status-under { color: #1e8449; }
+.status-warning { color: #9a6700; }
+.status-over { color: #c0392b; }

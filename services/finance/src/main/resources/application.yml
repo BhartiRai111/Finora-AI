@@ -3,6 +3,9 @@
 spring:
   application:
     name: finance
+  jackson:
+    # The finance API speaks snake_case JSON like the rest of the public API.
+    property-naming-strategy: SNAKE_CASE
   datasource:
     url: ${DB_URL:jdbc:postgresql://${FINORA_DB_HOST:localhost}:${FINORA_DB_PORT:5432}/finora_finance}
     username: ${DB_USER:finora_finance_app}

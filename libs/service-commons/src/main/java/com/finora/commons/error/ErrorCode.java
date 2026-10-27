@@ -6,16 +6,22 @@ import java.util.Locale;
 public enum ErrorCode {
     BAD_REQUEST(400, "Bad request"),
     AUTH_REQUIRED(401, "Authentication required"),
+    INVALID_CREDENTIALS(401, "Invalid credentials"),
     FORBIDDEN(403, "Forbidden"),
+    CSRF_INVALID(403, "Request rejected"),
+    MFA_REQUIRED(403, "Multi-factor authentication required"),
+    STEP_UP_REQUIRED(403, "Recent re-authentication required"),
     NOT_FOUND(404, "Not found"),
     METHOD_NOT_ALLOWED(405, "Method not allowed"),
     PAYLOAD_TOO_LARGE(413, "Payload too large"),
     UNSUPPORTED_MEDIA_TYPE(415, "Unsupported media type"),
+    CONFLICT(409, "Conflict"),
     IDEMPOTENCY_IN_PROGRESS(409, "Idempotent request in progress"),
     VALIDATION_FAILED(422, "Validation failed"),
     IDEMPOTENCY_KEY_REUSED(422, "Idempotency key reused with a different request"),
     RATE_LIMITED(429, "Too many requests"),
     INTERNAL(500, "Internal error"),
+    FEATURE_UNAVAILABLE(503, "Feature unavailable"),
     UPSTREAM_ERROR(502, "Upstream error"),
     UPSTREAM_UNAVAILABLE(503, "Upstream unavailable"),
     UPSTREAM_TIMEOUT(504, "Upstream timeout");
@@ -47,6 +53,7 @@ public enum ErrorCode {
             case 403 -> FORBIDDEN;
             case 404 -> NOT_FOUND;
             case 405 -> METHOD_NOT_ALLOWED;
+            case 409 -> CONFLICT;
             case 413 -> PAYLOAD_TOO_LARGE;
             case 415 -> UNSUPPORTED_MEDIA_TYPE;
             case 422 -> VALIDATION_FAILED;

@@ -24,6 +24,11 @@ class RouteTableTest {
         assertThat(owner(s + "/transactions")).isEqualTo("finance");
         assertThat(owner(s + "/transactions/abc/tags")).isEqualTo("finance");
         assertThat(owner(s + "/invoices/9")).isEqualTo("finance");
+        for (String segment : new String[] {"accounts", "transactions", "transfers", "categories", "tags", "recurring-rules", "budgets", "goals",
+                "subscriptions", "bills", "net-worth", "net-worth/series", "summaries/cashflow", "finance-settings", "transactions/1/void",
+                "bills/1/pay", "recurring-rules/run", "categories/starter"}) {
+            assertThat(owner(s + "/" + segment)).as(segment).isEqualTo("finance");
+        }
         assertThat(owner(s + "/documents/1")).isEqualTo("document");
         assertThat(owner(s + "/imports")).isEqualTo("ingestion-integration");
         assertThat(owner(s + "/reports/monthly")).isEqualTo("reporting");
@@ -45,6 +50,31 @@ class RouteTableTest {
     void specificMePathBeatsTheWildcard() {
         assertThat(owner("/v1/me/notification-preferences")).isEqualTo("platform");
         assertThat(owner("/v1/me/sessions")).isEqualTo("identity-access");
+    }
+
+    @Test
+    void identityAndWorkspaceRoutesGoToIdentityAccess() {
+        assertThat(owner("/v1/workspaces")).isEqualTo("identity-access");
+        assertThat(owner(s)).isEqualTo("identity-access");
+        assertThat(owner(s + "/members/42")).isEqualTo("identity-access");
+        assertThat(owner(s + "/invitations")).isEqualTo("identity-access");
+        assertThat(owner(s + "/ownership-transfers")).isEqualTo("identity-access");
+        assertThat(owner("/v1/invitations/accept")).isEqualTo("identity-access");
+        assertThat(owner("/v1/invitations/decline")).isEqualTo("identity-access");
+        assertThat(owner("/v1/auth/mfa/verify")).isEqualTo("identity-access");
+        assertThat(owner("/v1/auth/step-up")).isEqualTo("identity-access");
+    }
+
+    @Test
+    void sessionBoundAuthRoutesRequireASession() {
+        for (String path : new String[] {"/v1/auth/logout", "/v1/auth/password/change", "/v1/auth/step-up", "/v1/auth/mfa/enroll",
+                "/v1/auth/mfa/confirm", "/v1/auth/mfa/verify", "/v1/auth/mfa/disable", "/v1/invitations/accept", "/v1/invitations/decline",
+                "/v1/workspaces", "/v1/me"}) {
+            assertThat(table.match(path).orElseThrow().access()).as(path).isEqualTo(Route.Access.SESSION_REQUIRED);
+        }
+        for (String path : new String[] {"/v1/auth/login", "/v1/auth/register", "/v1/auth/password-reset/request", "/v1/auth/password-reset/confirm"}) {
+            assertThat(table.match(path).orElseThrow().access()).as(path).isEqualTo(Route.Access.SESSION_OPTIONAL);
+        }
     }
 
     @Test

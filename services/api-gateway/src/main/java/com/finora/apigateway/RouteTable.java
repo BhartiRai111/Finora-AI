@@ -19,7 +19,7 @@ public final class RouteTable {
     private static final Set<String> FINANCE = Set.of("accounts", "transactions", "transfers", "categories", "tags",
             "recurring-rules", "budgets", "goals", "subscriptions", "bills", "clients", "vendors", "projects", "claims",
             "approvals", "approval-policies", "invoices", "adjustments", "payments", "vendor-bills", "invoice-series",
-            "companies");
+            "companies", "net-worth", "finance-settings", "summaries");
 
     private final List<Route> routes;
 
@@ -54,7 +54,17 @@ public final class RouteTable {
         List<Route> r = new ArrayList<>();
         // identity-access: credentials and sessions are public/optional-session and may set the session cookie.
         r.add(Route.of("/v1/auth/**", "identity-access", Route.Access.SESSION_OPTIONAL).withCookies().withStrictRate());
-        r.add(Route.of("/v1/invitations/accept", "identity-access", Route.Access.SESSION_OPTIONAL).withStrictRate());
+        // Session-bound operations: a session (and, for POST, the CSRF token) is mandatory; both manage the session cookie.
+        r.add(Route.of("/v1/auth/logout", "identity-access", Route.Access.SESSION_REQUIRED).withCookies());
+        r.add(Route.of("/v1/auth/password/change", "identity-access", Route.Access.SESSION_REQUIRED).withCookies());
+        r.add(Route.of("/v1/auth/step-up", "identity-access", Route.Access.SESSION_REQUIRED).withStrictRate());
+        for (String mfa : List.of("enroll", "confirm", "verify", "disable")) {
+            r.add(Route.of("/v1/auth/mfa/" + mfa, "identity-access", Route.Access.SESSION_REQUIRED).withCookies().withStrictRate());
+        }
+        // Accepting or declining needs a signed-in user (and therefore a CSRF token).
+        r.add(Route.of("/v1/invitations/accept", "identity-access", Route.Access.SESSION_REQUIRED).withStrictRate());
+        r.add(Route.of("/v1/invitations/decline", "identity-access", Route.Access.SESSION_REQUIRED).withStrictRate());
+        r.add(Route.of("/v1/spaces/{space}", "identity-access", Route.Access.SESSION_REQUIRED));
         r.add(Route.of("/v1/me", "identity-access", Route.Access.SESSION_REQUIRED));
         r.add(Route.of("/v1/me/notification-preferences", "platform", Route.Access.SESSION_REQUIRED));
         r.add(Route.of("/v1/me/**", "identity-access", Route.Access.SESSION_REQUIRED));

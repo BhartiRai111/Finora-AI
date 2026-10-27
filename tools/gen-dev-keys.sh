@@ -21,3 +21,8 @@ for name in "${names[@]}"; do
   openssl pkey -in "$DIR/$name.key.pem" -pubout -out "$DIR/$name.pub.pem"
   echo "created: $DIR/$name.key.pem and $DIR/$name.pub.pem"
 done
+# MFA secret-encryption key (256-bit, base64), development only.
+if [ ! -f "$DIR/mfa.key" ]; then
+  ( umask 077; openssl rand -base64 32 > "$DIR/mfa.key" )
+  echo "created: $DIR/mfa.key"
+fi

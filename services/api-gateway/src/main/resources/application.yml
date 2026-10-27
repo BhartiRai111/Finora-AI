@@ -40,7 +40,11 @@ finora:
         issuer: gateway
         private-key-path: ${FINORA_KEYS_DIR:.dev-keys}/gateway.key.pem
         ttl: 2m
+  auth:
+    cookie:
+      secure: ${FINORA_COOKIE_SECURE:true}
   gateway:
+    allowed-origins: ${FINORA_ALLOWED_ORIGINS:http://localhost:3000}
     # Owning services are private (loopback by default); the gateway is the only caller of the public API.
     services:
       identity-access: ${IDENTITY_ACCESS_URL:http://127.0.0.1:8081}
@@ -58,3 +62,4 @@ finora:
     max-upload-bytes: 26214400
     rate-limit:
       enabled: true
+      auth-capacity: ${FINORA_GATEWAY_AUTH_CAPACITY:10}

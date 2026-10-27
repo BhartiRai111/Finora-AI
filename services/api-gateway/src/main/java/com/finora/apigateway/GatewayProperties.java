@@ -2,6 +2,7 @@ package com.finora.apigateway;
 
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -17,6 +18,8 @@ public class GatewayProperties {
     private long maxBodyBytes = 1_048_576;
     private long maxUploadBytes = 26_214_400;
     private RateLimit rateLimit = new RateLimit();
+    /** Browser origins allowed to make state-changing requests (CSRF defence in depth). */
+    private List<String> allowedOrigins = List.of("http://localhost:3000");
 
     public static class RateLimit {
         private boolean enabled = true;
@@ -121,6 +124,14 @@ public class GatewayProperties {
 
     public void setMaxUploadBytes(long maxUploadBytes) {
         this.maxUploadBytes = maxUploadBytes;
+    }
+
+    public List<String> getAllowedOrigins() {
+        return allowedOrigins;
+    }
+
+    public void setAllowedOrigins(List<String> allowedOrigins) {
+        this.allowedOrigins = allowedOrigins;
     }
 
     public RateLimit getRateLimit() {

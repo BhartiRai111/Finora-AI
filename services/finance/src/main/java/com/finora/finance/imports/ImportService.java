@@ -123,9 +123,11 @@ public class ImportService {
     private final TransactionService transactions;
     private final ExpenseService expenses;
     private final TransactionTemplate rowTx;
+    private final com.finora.finance.notifications.NotificationService notifications;
 
     public ImportService(JdbcClient jdbc, JdbcTemplate template, ObjectMapper json, FinanceAudit audit, TransactionService transactions, ExpenseService expenses,
-            PlatformTransactionManager tm) {
+            PlatformTransactionManager tm, com.finora.finance.notifications.NotificationService notifications) {
+        this.notifications = notifications;
         this.jdbc = jdbc;
         this.template = template;
         this.json = json;
@@ -905,6 +907,10 @@ public class ImportService {
                 .param("now", now(ctx)).param("t", ctx.tenantId()).param("id", id).update();
         audit.record(ctx.tenantId(), ctx.userId(), ctx.clock(), "IMPORT_" + status, "IMPORT", id,
                 "committed " + c.committed() + ", rejected " + c.rejected() + ", duplicates " + c.duplicate() + ", skipped " + c.skipped());
+        // An in-app notice for the person who ran the import: counts only, never the file name or any row content. A repeat of the same outcome is ignored.
+        notifications.create(ctx.tenantId(), ctx.clock(), ctx.userId(), "REPORTS", "IMPORT", "COMPLETED".equals(status) || "CANCELLED".equals(status) ? "INFO" : "WARNING",
+                "Import " + status.toLowerCase(java.util.Locale.ROOT), c.committed() + " committed, " + c.rejected() + " rejected, " + c.duplicate() + " duplicate, " + c.skipped() + " skipped.",
+                java.util.Map.of("import_id", id.toString(), "status", status), "import:" + id + ":" + status);
         return view(ctx, job(ctx, id), true);
     }
 

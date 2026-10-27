@@ -4,9 +4,12 @@ import { useState } from "react";
 import { describeError } from "@/lib/api";
 import { formatMoney } from "@/lib/finance";
 import { useFinance } from "@/lib/FinanceContext";
-import { humanize, isMoneyColumn, isPercentColumn, saveBlob, type Forecast, type Report } from "@/lib/insights";
+import { humanize, isMoneyColumn, isPercentColumn, saveBlob, type CurrencyReport, type Forecast, type Report } from "@/lib/insights";
+import type { Conversion, RegionalSettings } from "@/lib/regional";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
+import { ConvertedView } from "../regional/ConvertedView";
+import { BarChart } from "../ui/BarChart";
 
 const SERIES = new Set(["cash-flow", "business-performance"]);
 const TITLES: Record<string, string> = {
@@ -19,6 +22,17 @@ const TITLES: Record<string, string> = {
   "project-profitability": "Project profitability",
 };
 
+/** Which columns of each report make sense as bars. Reports not listed here are tables only. */
+const CHARTS: Record<string, string[]> = {
+  "cash-flow": ["income", "net_expense"],
+  "business-performance": ["invoiced_net", "received", "expenses"],
+  "net-worth": ["net_worth"],
+  "budget-vs-actual": ["budget", "spent"],
+  receivables: ["outstanding"],
+  "receivables-by-client": ["amount"],
+  "project-profitability": ["revenue_net", "costs"],
+};
+
 function cell(value: string | undefined, column: string, currency: string): string {
   if (value === undefined || value === "") return "—";
   if (isPercentColumn(column)) return `${value}%`;
@@ -26,7 +40,9 @@ function cell(value: string | undefined, column: string, currency: string): stri
   return value;
 }
 
-type Applied = { name: string; from: string; to: string; granularity: string; compare: boolean; month: string; asOf: string };
+type Applied = { name: string; from: string; to: string; granularity: string; compare: boolean; month: string; asOf: string; reporting: string; allowStale: boolean };
+
+type ConvertedState = { state: "idle" } | { state: "loading" } | { state: "error"; message: string } | { state: "ready"; conversion: Conversion };
 
 function query(a: Applied): string {
   const q = new URLSearchParams();
@@ -50,7 +66,9 @@ function query(a: Applied): string {
 export function ReportsPanel({ domain, canExport }: { domain: "PERSONAL" | "BUSINESS"; canExport: boolean }) {
   const finance = useFinance();
   const names = domain === "BUSINESS" ? ["business-performance", "receivables", "receivables-by-client", "project-profitability"] : ["cash-flow", "budget-vs-actual", "net-worth"];
-  const [draft, setDraft] = useState<Applied>({ name: names[0]!, from: "", to: "", granularity: "MONTH", compare: false, month: "", asOf: "" });
+  const [draft, setDraft] = useState<Applied>({ name: names[0]!, from: "", to: "", granularity: "MONTH", compare: false, month: "", asOf: "", reporting: "", allowStale: false });
+  const regional = useResource((signal) => finance.get<RegionalSettings>("/finance-regional", signal).catch(() => null));
+  const [converted, setConverted] = useState<ConvertedState>({ state: "idle" });
   const [applied, setApplied] = useState<Applied>(draft);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,11 +77,25 @@ export function ReportsPanel({ domain, canExport }: { domain: "PERSONAL" | "BUSI
     return finance.get<Report>(`/finance-reports/${applied.name}${qs ? `?${qs}` : ""}`, signal);
   });
 
+  async function loadConverted(a: Applied) {
+    if (!a.reporting) return setConverted({ state: "idle" });
+    setConverted({ state: "loading" });
+    try {
+      const qs = query(a);
+      const sep = qs ? `${qs}&` : "";
+      const result = await finance.get<{ conversion: Conversion }>(`/finance-reports/${a.name}/converted?${sep}reporting_currency=${a.reporting}&allow_stale=${a.allowStale}`);
+      setConverted({ state: "ready", conversion: result.conversion });
+    } catch (e) {
+      setConverted({ state: "error", message: describeError(e) });
+    }
+  }
+
   function run() {
     if (draft.from && draft.to && draft.from > draft.to) return setError("The start date cannot be after the end date.");
     setError(null);
     setApplied(draft);
     report.reload();
+    void loadConverted(draft);
   }
 
   async function exportCsv() {
@@ -71,7 +103,9 @@ export function ReportsPanel({ domain, canExport }: { domain: "PERSONAL" | "BUSI
     setError(null);
     try {
       const qs = query(applied);
-      const file = await finance.download(`/finance-reports/${applied.name}/export${qs ? `?${qs}` : ""}`);
+      const extra = applied.reporting ? `reporting_currency=${applied.reporting}&allow_stale=${applied.allowStale}` : "";
+      const joined = [qs, extra].filter(Boolean).join("&");
+      const file = await finance.download(`/finance-reports/${applied.name}/export${joined ? `?${joined}` : ""}`);
       saveBlob(file.blob, file.filename);
     } catch (e) {
       setError(describeError(e));
@@ -115,6 +149,14 @@ export function ReportsPanel({ domain, canExport }: { domain: "PERSONAL" | "BUSI
         {draft.name.startsWith("receivables") && (
           <div className="column"><label htmlFor="rep-asof">As of</label><input id="rep-asof" type="date" value={draft.asOf} onChange={(e) => set({ asOf: e.target.value })} /></div>
         )}
+        <div className="column">
+          <label htmlFor="rep-reporting">Also show in</label>
+          <select id="rep-reporting" value={draft.reporting} onChange={(e) => set({ reporting: e.target.value })}>
+            <option value="">Original currencies only</option>
+            {(regional.status === "ready" && regional.data ? regional.data.supported.currencies : []).map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        {draft.reporting && <label><input type="checkbox" checked={draft.allowStale} onChange={(e) => set({ allowStale: e.target.checked })} /> Accept stale exchange rates</label>}
         <button type="button" onClick={run}>Show report</button>
         {canExport && <button type="button" onClick={() => void exportCsv()} disabled={busy}>{busy ? "Preparing…" : "Download CSV"}</button>}
       </div>
@@ -127,6 +169,14 @@ export function ReportsPanel({ domain, canExport }: { domain: "PERSONAL" | "BUSI
         </>
       )}
       {report.status === "ready" && <ReportView report={report.data} />}
+      {converted.state === "loading" && <Loading label="Converting…" />}
+      {converted.state === "error" && (
+        <>
+          <Notice>{converted.message}</Notice>
+          <button type="button" onClick={() => void loadConverted(applied)}>Try again</button>
+        </>
+      )}
+      {converted.state === "ready" && <ConvertedView conversion={converted.conversion} locale={regional.status === "ready" && regional.data ? regional.data.locale : null} dateFormat={regional.status === "ready" && regional.data ? regional.data.date_format : null} />}
       <Forecasts domain={domain} />
     </>
   );
@@ -140,6 +190,7 @@ function ReportView({ report: r }: { report: Report }) {
       {r.currencies.length === 0 && <p>No activity in this period yet, so there is nothing to report.</p>}
       {r.currencies.map((c) => (
         <div key={c.currency} className="column">
+          <ReportChart report={r} c={c} />
           <table>
             <caption>{c.currency}</caption>
             <thead>
@@ -190,6 +241,25 @@ function ReportView({ report: r }: { report: Report }) {
         <ul>{r.notes.map((n) => <li key={n}>{n}</li>)}</ul>
       </details>
     </section>
+  );
+}
+
+/** A chart only when there is something to compare: at least two periods and at least one non-zero value among the charted columns. */
+function ReportChart({ report: r, c }: { report: Report; c: CurrencyReport }) {
+  const wanted = (CHARTS[r.report] ?? []).filter((col) => c.columns.includes(col));
+  const rows = c.rows.filter((row) => row.activity || r.granularity === null);
+  const hasValue = rows.some((row) => wanted.some((col) => Number(row.values[col] ?? "0") !== 0));
+  if (wanted.length === 0 || rows.length < 2 || !hasValue) return null;
+  const labels = rows.map((row) => row.period);
+  const names = wanted.map((col) => humanize(col));
+  return (
+    <BarChart
+      title={`${r.title}: ${names.join(", ")}`}
+      currency={c.currency}
+      labels={labels}
+      series={wanted.map((col) => ({ key: col, label: humanize(col), values: rows.map((row) => row.values[col]) }))}
+      summary={`Bar chart in ${c.currency}: ${names.join(" and ")} for ${rows.length} periods, from ${labels[0]} to ${labels[labels.length - 1]}. The table below lists every value.`}
+    />
   );
 }
 

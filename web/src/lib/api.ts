@@ -21,6 +21,14 @@ export function setCsrfToken(token: string | null): void {
   csrfToken = token;
 }
 
+// Called when a request made during a signed-in session is refused because the session is gone (expired, revoked or signed out
+// elsewhere), so the app can leave the signed-in state instead of showing every panel as broken.
+let onSessionEnded: (() => void) | null = null;
+
+export function setSessionEndedHandler(handler: (() => void) | null): void {
+  onSessionEnded = handler;
+}
+
 type RequestOptions = {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
   body?: unknown;
@@ -63,6 +71,7 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   }
   if (!response.ok) {
     const problem = (data ?? {}) as { code?: string; detail?: string; retry_after_seconds?: number };
+    if (response.status === 401 && problem.code === "AUTH_REQUIRED" && !path.startsWith("/v1/me") && !path.startsWith("/v1/auth/")) onSessionEnded?.();
     throw new ApiError(response.status, problem.code ?? "ERROR", problem.detail, problem.retry_after_seconds);
   }
   return data as T;
@@ -119,7 +128,7 @@ export function describeError(error: unknown): string {
     case "RATE_LIMITED":
       return error.retryAfterSeconds
         ? `Too many attempts. Try again in ${error.retryAfterSeconds} seconds.`
-        : "Too many attempts. Please wait and try again.";
+        : (error.detail ?? "Too many attempts. Please wait and try again.");
     case "AUTH_REQUIRED":
       return "Your session has ended. Please sign in again.";
     case "CSRF_INVALID":
@@ -129,7 +138,8 @@ export function describeError(error: unknown): string {
     case "STEP_UP_REQUIRED":
       return "Please confirm your identity again to continue.";
     case "FORBIDDEN":
-      return "You do not have permission to do that.";
+      // A plan or subscription refusal explains itself ("Your current plan ... does not include ..."); anything else stays generic.
+      return error.detail?.startsWith("Your ") ? error.detail : "You do not have permission to do that.";
     case "NOT_FOUND":
       return "That could not be found, or you do not have access to it.";
     case "VALIDATION_FAILED":

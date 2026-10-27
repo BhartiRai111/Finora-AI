@@ -53,7 +53,7 @@ population standard deviation (floored at zero for amounts that cannot be negati
 `INSUFFICIENT_HISTORY` and no number; months without activity are listed as missing and left out (not treated as zero); months more than 2 standard
 deviations away are flagged and kept; confidence is `LOW` when coverage is below 0.67, an outlier exists or the spread exceeds half the mean, else
 `MODERATE` (never higher); arithmetic is exact decimal, rounding HALF_EVEN to the currency. It models no trend, seasonality, growth or known future
-invoices/bills, says so in its assumptions, and is labelled an estimate. `ai_explanation` is `UNAVAILABLE`: no AI provider is configured, and no AI
+invoices/bills, says so in its assumptions, and is labelled an estimate. `ai_explanation` is `UNAVAILABLE` when no AI provider is configured (the default) and `IN_ASSISTANT` when one is (explanations live in the Assistant, see `docs/ai-assistant.md`); no AI
 output is ever used for the numbers.
 
 ## Imports (CSV only)
@@ -133,3 +133,8 @@ no revenue-recognition policy (accrual and cash are shown side by side); no sche
 FX conversion (PD-09); no retention policy engine or virus scanning (best-effort content checks only); single-instance local file storage unless an object-store
 implementation of `DocumentStorage` is added; an import commit runs inside the request (bounded at 5,000 rows) rather than in a separate worker; transfers are not
 reconcilable; list pages use limit and offset.
+
+
+## Reporting currency (Step 21)
+
+Any report can also be shown in a reporting currency beside its original per-currency figures (`GET /finance-reports/{name}/converted?reporting_currency=XXX`) and its CSV export can append a converted block. Rates are user-supplied, every rate used is listed with its date and source, a missing or stale rate makes that currency `UNAVAILABLE` and blocks any combined total, and forecasts are never converted. See `docs/multi-currency-regional-gst.md`.

@@ -7,6 +7,8 @@ import { FinanceProvider, useFinance } from "@/lib/FinanceContext";
 import type { BusinessSettings } from "@/lib/business";
 import type { Workspace } from "@/lib/types";
 import { Loading, Notice } from "../Notice";
+import { AccessDenied, EmptyState } from "../ui/States";
+import { BUSINESS_SECTIONS } from "@/lib/sections";
 import { BusinessOverview } from "./BusinessOverview";
 import { BusinessSettingsPanel } from "./BusinessSettingsPanel";
 import { ExpensesPanel } from "./ExpensesPanel";
@@ -15,25 +17,36 @@ import { loadLookups, NO_LOOKUPS, type Lookups } from "./lookups";
 import { PartiesPanel } from "./PartiesPanel";
 import { PaymentsPanel } from "./PaymentsPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
+import { AccountingPanel } from "../accounting/AccountingPanel";
+import { GstPanel } from "../gst/GstPanel";
+import { AlertsPanel } from "../platform/AlertsPanel";
+import { AdminOverviewPanel, IntegrationRegistry } from "../platform/IntegrationRegistry";
+import { NotificationStrip, NotificationsPanel } from "../platform/NotificationsPanel";
+import { SubscriptionPanel } from "../platform/SubscriptionPanel";
+import { RegionalPanel } from "../regional/RegionalPanel";
+import { AssistantPanel } from "../assistant/AssistantPanel";
 import { DocumentsPanel } from "../insights/DocumentsPanel";
 import { ImportsPanel } from "../insights/ImportsPanel";
 import { ReconcilePanel } from "../insights/ReconcilePanel";
 import { ReportsPanel } from "../insights/ReportsPanel";
 
-type Tab = "overview" | "invoices" | "payments" | "clients" | "vendors" | "projects" | "expenses" | "reports" | "imports" | "documents" | "reconcile" | "settings";
+type Tab = "overview" | "invoices" | "payments" | "clients" | "vendors" | "projects" | "expenses" | "reports" | "imports" | "documents" | "reconcile" | "assistant" | "regional" | "gst" | "integrations" | "notifications" | "alerts" | "plan" | "admin" | "settings";
 
-/** Business finance for one BUSINESS workspace. Every request is authorized again by the server. */
-export function BusinessApp({ workspace }: { workspace: Workspace }) {
+/**
+ * Business finance for one BUSINESS workspace. Every request is authorized again by the server. Used on its own it shows its own
+ * tabs; given a `section` (the application shell does this) it renders only that section and navigation is the shell's job.
+ */
+export function BusinessApp({ workspace, section, onSectionChange }: { workspace: Workspace; section?: string; onSectionChange?: (id: string) => void }) {
   if (workspace.type !== "BUSINESS") return <Notice kind="info">Business finance is only available in business workspaces.</Notice>;
   if (!businessAccess.any(workspace.role)) return <Notice kind="info">Your role does not have access to this workspace&apos;s finances.</Notice>;
   return (
     <FinanceProvider space={workspace.id}>
-      <BusinessShell workspace={workspace} />
+      <BusinessShell workspace={workspace} section={section} onSectionChange={onSectionChange} />
     </FinanceProvider>
   );
 }
 
-function BusinessShell({ workspace }: { workspace: Workspace }) {
+function BusinessShell({ workspace, section, onSectionChange }: { workspace: Workspace; section?: string; onSectionChange?: (id: string) => void }) {
   const finance = useFinance();
   const role = workspace.role;
   const full = businessAccess.read(role);
@@ -49,10 +62,21 @@ function BusinessShell({ workspace }: { workspace: Workspace }) {
     { id: "imports", label: "Imports", show: insightsAccess.importsRead(role) },
     { id: "documents", label: "Documents", show: insightsAccess.documentsRead(role) },
     { id: "reconcile", label: "Reconcile", show: insightsAccess.importsRead(role) },
+    { id: "assistant", label: "Assistant", show: insightsAccess.reports(role) },
+    { id: "regional", label: "Currency & region", show: insightsAccess.reports(role) },
+    { id: "gst", label: "GST", show: insightsAccess.reports(role) },
+    { id: "integrations", label: "Integrations", show: businessAccess.read(role) },
+    { id: "notifications", label: "Notifications", show: insightsAccess.reports(role) },
+    { id: "alerts", label: "Alerts", show: insightsAccess.reports(role) },
+    { id: "plan", label: "Plan & billing", show: insightsAccess.reports(role) },
+    { id: "admin", label: "Administration", show: businessAccess.settingsWrite(role) },
     { id: "settings", label: "Settings", show: full },
   ];
   const visible = tabs.filter((t) => t.show);
-  const [tab, setTab] = useState<Tab>(visible[0]!.id);
+  const [localTab, setLocalTab] = useState<Tab>(visible[0]!.id);
+  const controlled = section !== undefined;
+  const tab = (controlled ? section : localTab) as Tab;
+  const setTab = (id: Tab) => (onSectionChange ? onSectionChange(id) : setLocalTab(id));
   const [lookups, setLookups] = useState<Lookups>(NO_LOOKUPS);
   const [base, setBase] = useState<{ currency: string } | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -88,16 +112,22 @@ function BusinessShell({ workspace }: { workspace: Workspace }) {
   }
   if (!base) return <Loading label="Loading business finance…" />;
   const currency = base.currency;
+  if (controlled && !visible.some((t) => t.id === tab)) {
+    return BUSINESS_SECTIONS.some((x) => x.id === tab) ? <AccessDenied /> : <EmptyState title="This page does not exist">Choose a section from the menu.</EmptyState>;
+  }
   return (
     <>
-      <div role="tablist" aria-label="Business finance sections" className="tabs">
-        {visible.map((t) => (
-          <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} className={tab === t.id ? "tab active" : "tab"} onClick={() => setTab(t.id)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <section role="tabpanel">
+      {insightsAccess.reports(role) && <NotificationStrip onOpen={() => setTab("notifications")} refreshKey={tick} />}
+      {!controlled && (
+        <div role="tablist" aria-label="Business finance sections" className="tabs">
+          {visible.map((t) => (
+            <button key={t.id} role="tab" type="button" aria-selected={tab === t.id} className={tab === t.id ? "tab active" : "tab"} onClick={() => setTab(t.id)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <section role={controlled ? undefined : "tabpanel"}>
         {tab === "overview" && <BusinessOverview refreshKey={tick} />}
         {tab === "invoices" && <InvoicesPanel role={role} lookups={lookups} baseCurrency={currency} onChanged={changed} />}
         {tab === "payments" && <PaymentsPanel role={role} lookups={lookups} baseCurrency={currency} onChanged={changed} />}
@@ -109,6 +139,14 @@ function BusinessShell({ workspace }: { workspace: Workspace }) {
         {tab === "imports" && <ImportsPanel domain="BUSINESS" canWrite={insightsAccess.importsWrite(role)} accounts={[]} />}
         {tab === "documents" && <DocumentsPanel domain="BUSINESS" canUpload={insightsAccess.documentsUpload(role)} canManage={insightsAccess.documentsManage(role)} accounts={[]} baseCurrency={currency} />}
         {tab === "reconcile" && <ReconcilePanel canWrite={insightsAccess.importsWrite(role)} />}
+        {tab === "assistant" && <AssistantPanel domain="BUSINESS" />}
+        {tab === "regional" && <RegionalPanel />}
+        {tab === "gst" && <GstPanel canEditRegistration={businessAccess.settingsWrite(role)} canEditDetails={businessAccess.write(role)} canExport={insightsAccess.exportReports(role)} />}
+        {tab === "integrations" && <><IntegrationRegistry /><AccountingPanel /></>}
+        {tab === "notifications" && <NotificationsPanel onChanged={changed} />}
+        {tab === "alerts" && <AlertsPanel canEditSettings={businessAccess.settingsWrite(role)} />}
+        {tab === "plan" && <SubscriptionPanel isOwner={role === "OWNER"} canSeeAdmin={businessAccess.settingsWrite(role)} />}
+        {tab === "admin" && <AdminOverviewPanel />}
         {tab === "settings" && <BusinessSettingsPanel role={role} onSaved={changed} />}
       </section>
     </>

@@ -10,8 +10,14 @@ export function Notice({ kind = "error", children }: { kind?: "error" | "info" |
 
 export function Loading({ label = "Loading…" }: { label?: string }) {
   return (
-    <p role="status" aria-live="polite" className="loading">
-      {label}
-    </p>
+    <div className="loading-block">
+      <p role="status" aria-live="polite" className="loading">
+        {label}
+      </p>
+      <div className="skeleton" aria-hidden="true">
+        <div className="skeleton-line" style={{ width: "90%" }} />
+        <div className="skeleton-line" style={{ width: "72%" }} />
+      </div>
+    </div>
   );
 }

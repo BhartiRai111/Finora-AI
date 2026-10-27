@@ -20,13 +20,17 @@ class RouteTableTest {
     void reportsImportsDocumentsAndReconciliationAreFinanceRoutesAndOnlyImportsAndDocumentsTakeUploads() {
         for (String path : List.of("/finance-reports", "/finance-reports/cash-flow", "/finance-reports/cash-flow/export", "/finance-forecast", "/finance-imports", "/finance-imports/1/commit",
                 "/finance-imports/1/error-report", "/finance-documents", "/finance-documents/1/content", "/finance-documents/1/extract", "/finance-reconciliation/lines",
-                "/finance-reconciliation/lines/1/match", "/finance-reconciliation/summary")) {
+                "/finance-reconciliation/lines/1/match", "/finance-reconciliation/summary", "/finance-assistant", "/finance-assistant/ask", "/finance-assistant/what-if", "/finance-assistant/anomalies",
+                "/finance-assistant/expense-change", "/finance-regional", "/finance-regional/periods", "/finance-rates", "/finance-rates/lookup", "/finance-rates/1/void", "/finance-gst/summary",
+                "/finance-gst/invoices/1", "/finance-gst/export", "/finance-accounting", "/finance-accounting/sync-runs", "/finance-reports/cash-flow/converted", "/finance-notifications", "/finance-notifications/unread-count", "/finance-notifications/1/read", "/finance-notifications/read-all",
+                "/finance-alerts", "/finance-alerts/settings/LOW_CASH", "/finance-alerts/evaluate", "/finance-alerts/1/acknowledge", "/finance-subscription", "/finance-subscription/plans", "/finance-subscription/change",
+                "/finance-billing", "/finance-billing/records", "/finance-billing/contact", "/finance-integrations", "/finance-integrations/accounting/errors", "/finance-admin/overview")) {
             assertThat(owner(s + path)).as(path).isEqualTo("finance");
         }
         for (String path : List.of("/finance-imports", "/finance-imports/1/mapping", "/finance-documents", "/finance-documents/1/content")) {
             assertThat(table.match(s + path).orElseThrow().uploads()).as(path).isTrue();
         }
-        for (String path : List.of("/finance-reports/cash-flow", "/finance-forecast", "/finance-reconciliation/lines", "/clients", "/invoices")) {
+        for (String path : List.of("/finance-reports/cash-flow", "/finance-forecast", "/finance-reconciliation/lines", "/finance-assistant/ask", "/clients", "/invoices")) {
             assertThat(table.match(s + path).orElseThrow().uploads()).as(path).isFalse();
         }
         // the reserved prefixes of the not-yet-built services keep their owners

@@ -39,7 +39,7 @@ function WorkspaceList() {
   }
 
   return (
-    <main>
+    <main id="main">
       <h1>Your workspaces</h1>
       {list.status === "loading" && <Loading label="Loading workspaces…" />}
       {list.status === "error" && (
@@ -52,7 +52,7 @@ function WorkspaceList() {
         <ul className="cards" aria-label="Workspaces">
           {list.data.items.map((w) => (
             <li key={w.id} className="card">
-              <Link href={`/workspaces/${w.id}`} onClick={() => setActiveWorkspaceId(w.id)}>
+              <Link href={w.type === "PERSONAL" ? "/finance" : `/workspaces/${w.id}`} onClick={() => setActiveWorkspaceId(w.id)}>
                 {w.type === "PERSONAL" ? "Personal profile" : w.name}
               </Link>
               <span className="badge">{w.type === "PERSONAL" ? "Private to you" : roleLabel(w.role)}</span>

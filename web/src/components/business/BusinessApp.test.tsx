@@ -182,7 +182,7 @@ describe("invoices", () => {
       "GET /v1/spaces/b1/invoices/i1": () => ({ status: 200, body: invoice({ lines: [], payments: [] }) }),
       "POST /v1/spaces/b1/payments": ({ body }) => {
         attempt += 1;
-        if (attempt === 1) return { status: 422, body: { code: "ALLOCATION_EXCEEDS", detail: "Invoice INV-0001 has only INR 100.00 outstanding", request_id: "r" } };
+        if (attempt === 1) return { status: 422, body: { code: "ALLOCATION_EXCEEDS", detail: "Invoice INV-0001 has only 100.00 INR outstanding", request_id: "r" } };
         expect(body).toMatchObject({ client_id: "c1", amount: "40.00", currency: "INR", allocations: [{ invoice_id: "i1", amount: "40.00" }] });
         return { status: 201, body: { id: "p1" } };
       },
@@ -195,7 +195,7 @@ describe("invoices", () => {
     await userEvent.clear(within(form).getByLabelText("Amount received"));
     await userEvent.type(within(form).getByLabelText("Amount received"), "140.00");
     await userEvent.click(within(form).getByRole("button", { name: "Record payment" }));
-    expect(await screen.findByText(/only INR 100.00 outstanding/)).toBeInTheDocument();
+    expect(await screen.findByText(/only 100.00 INR outstanding/)).toBeInTheDocument();
     await userEvent.clear(within(form).getByLabelText("Amount received"));
     await userEvent.type(within(form).getByLabelText("Amount received"), "40.00");
     await userEvent.clear(within(form).getByLabelText(/Amount to apply/));

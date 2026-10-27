@@ -277,8 +277,8 @@ public class PaymentService {
         }
         BigDecimal sum = allocs.stream().map(Alloc::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (sum.compareTo(available) > 0) {
-            throw new ApiException(ErrorCode.ALLOCATION_EXCEEDS, "The allocations total " + Currencies.format(sum, currency) + ", more than the "
-                    + Currencies.format(available, currency) + " available on the payment");
+            throw new ApiException(ErrorCode.ALLOCATION_EXCEEDS, "The allocations total " + Currencies.format(sum, currency) + " " + currency
+                    + ", more than the " + Currencies.format(available, currency) + " " + currency + " available on the payment");
         }
         List<UUID> ids = allocs.stream().map(Alloc::invoiceId).sorted().toList();
         List<UUID> locked = jdbc.sql("select id from invoices where tenant_id = :t and id in (:ids) and client_id = :c order by id for update").param("t", ctx.tenantId())
@@ -303,7 +303,7 @@ public class PaymentService {
         }
         BigDecimal outstanding = InvoiceService.outstanding(inv);
         if (amount.compareTo(outstanding) > 0) {
-            throw new ApiException(ErrorCode.ALLOCATION_EXCEEDS, "Invoice " + inv.number() + " has only " + Currencies.format(outstanding, currency) + " outstanding");
+            throw new ApiException(ErrorCode.ALLOCATION_EXCEEDS, "Invoice " + inv.number() + " has only " + Currencies.format(outstanding, currency) + " " + currency + " outstanding");
         }
         jdbc.sql("""
                 insert into payment_allocations (id, tenant_id, payment_id, invoice_id, amount, created_by, created_at)

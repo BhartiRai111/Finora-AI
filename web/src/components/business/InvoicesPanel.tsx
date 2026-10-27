@@ -311,7 +311,10 @@ function InvoiceDetail({ invoice: inv, write, lookups, baseCurrency, onEdit, onC
         </div>
       )}
       {panel === "pay" && (
-        <PaymentForm lookups={lookups} baseCurrency={baseCurrency} preset={inv} onDone={(p: Payment) => { void p; onReload(); setPanel("none"); }} />
+        <PaymentForm lookups={lookups} baseCurrency={baseCurrency} preset={inv} onDone={(p: Payment) => {
+          setPanel("none");
+          finance.get<Invoice>(`/invoices/${inv.id}`).then((fresh) => onChanged(fresh, `Payment of ${formatMoney(p.amount, p.currency)} recorded.`)).catch(() => onReload());
+        }} />
       )}
     </section>
   );

@@ -40,6 +40,7 @@ const routes = (over: Record<string, () => { status: number; body?: unknown }> =
   [`GET /v1/spaces/p1/transactions?${MARCH}&limit=8&kind=INCOME`]: () => ({ status: 200, body: { items: [tx("t5", "6000.00", "Pay day", null, "INCOME")], next_cursor: null } }),
   [`GET /v1/spaces/p1/transactions?${MARCH}&limit=8&q=chai`]: () => ({ status: 200, body: { items: [tx("t1", "450.00", "Chai Point", "c-food")], next_cursor: null } }),
   "GET /v1/spaces/p1/categories?include_archived=true": () => ({ status: 200, body: { items: [{ id: "c-food", parent_id: null, name: "Food", kind: "EXPENSE", archived: false, version: 0 }] } }),
+  "GET /v1/spaces/p1/accounts": () => ({ status: 200, body: { items: [ACCOUNT] } }),
   "GET /v1/spaces/p1/accounts?include_archived=true": () => ({ status: 200, body: { items: [ACCOUNT] } }),
   [`GET /v1/spaces/p1/finance-reports/cash-flow?${MARCH}&granularity=MONTH&compare=previous`]: () => ({ status: 200, body: compare }),
   "GET /v1/spaces/p1/finance-reports/cash-flow?from=2025-10-01&to=2026-03-15&granularity=MONTH": () => ({ status: 200, body: series }),
@@ -54,8 +55,12 @@ describe("dashboard (mocked fetch)", () => {
     mockApi(routes());
     wrap(<Dashboard onChanged={() => undefined} />);
     const summary = await screen.findByRole("region", { name: "Financial summary" });
-    expect(await within(summary).findByText("INR 12,34,067.50")).toBeInTheDocument(); // available balance (net worth) in lakh grouping
-    expect(within(summary).getByText("Available balance")).toBeInTheDocument();
+    const balance = await screen.findByRole("region", { name: "Total balance" });
+    expect(await within(balance).findByText("INR 12,34,067.50")).toBeInTheDocument(); // balance (net worth) in lakh grouping
+    expect(await within(balance).findByText("Salary account · bank")).toBeInTheDocument(); // the person's own account, with its balance
+    expect(within(balance).getByText("Added by you; not linked to a bank.")).toBeInTheDocument();
+    expect(within(balance).getByRole("link", { name: "Transfer" })).toHaveAttribute("href", "/finance/transactions");
+    expect(within(summary).getByText("INR 200.04")).toBeInTheDocument(); // budget remaining: 200.05 + (-0.01), added exactly
     expect(within(summary).getByText("INR 6,000.10")).toBeInTheDocument();
     expect(within(summary).getByText("INR 1,600.30")).toBeInTheDocument();
     expect(within(summary).getByText("INR 4,399.80")).toBeInTheDocument();
@@ -82,13 +87,14 @@ describe("dashboard (mocked fetch)", () => {
   it("shows the spending plan from the budgets with totals added exactly and states in words", async () => {
     mockApi(routes());
     wrap(<Dashboard onChanged={() => undefined} />);
-    const plan = (await screen.findByRole("heading", { name: "Spending plan" })).closest("section")!;
-    expect(await within(plan).findByText("INR 900.06")).toBeInTheDocument(); // 800.05 + 100.01
+    const plan = (await screen.findByRole("heading", { name: "Spending limit" })).closest("section")!;
+    expect((await within(plan).findAllByText("INR 900.06")).length).toBeGreaterThan(0); // 800.05 + 100.01 (summary and gauge)
     expect(within(plan).getByText("INR 1,100.10")).toBeInTheDocument();
     expect(within(plan).getByText("INR 200.04")).toBeInTheDocument(); // 200.05 + (-0.01)
     expect(within(plan).getByText(/Approaching the limit · 80\.00% used/)).toBeInTheDocument();
     expect(within(plan).getByText(/Over budget · 100\.01% used/)).toBeInTheDocument();
     expect(within(plan).getAllByRole("progressbar")).toHaveLength(3);
+    expect(within(plan).getByRole("img", { name: /INR 900\.06 spent of a INR 1,100\.10 limit, 82 percent/ })).toBeInTheDocument();
   });
 
   it("shows goals, upcoming payments and the insight that Finora calculated", async () => {
@@ -141,7 +147,7 @@ describe("dashboard (mocked fetch)", () => {
     const summary = screen.getByRole("region", { name: "Financial summary" });
     expect(within(summary).getAllByText("—").length).toBe(4);
     expect(await screen.findByText(/No income or spending recorded in INR for this period yet/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Set a monthly budget" })).toHaveAttribute("href", "/finance/budgets");
+    expect(screen.getAllByRole("link", { name: "Set a monthly budget" })[0]).toHaveAttribute("href", "/finance/budgets");
     expect(screen.getByText(/No goals yet/)).toBeInTheDocument();
     expect(await screen.findByText(/No transactions in this month yet/)).toBeInTheDocument();
   });
@@ -151,7 +157,7 @@ describe("dashboard (mocked fetch)", () => {
     mockApi(routes({ [`GET /v1/spaces/p1/transactions?${MARCH}&limit=8`]: () => (fail ? problem(503, "DOWNSTREAM_UNAVAILABLE") : { status: 200, body: { items: [tx("t1", "450.00", "Chai Point", "c-food")], next_cursor: null } }) }));
     wrap(<Dashboard onChanged={() => undefined} />);
     expect(await screen.findByText("INR 12,34,067.50")).toBeInTheDocument();
-    const recent = screen.getByRole("heading", { name: "Recent transactions" }).closest("section")!;
+    const recent = screen.getByRole("heading", { name: "Recent activities" }).closest("section")!;
     expect(await within(recent).findByRole("alert")).toHaveTextContent("temporarily unavailable");
     fail = false;
     await userEvent.click(within(recent).getByRole("button", { name: "Try again" }));
@@ -165,10 +171,10 @@ describe("dashboard (mocked fetch)", () => {
         { currency: "USD", assets: "50.00", liabilities: "0.00", net_worth: "50.00", components: [] }] } }),
     }));
     wrap(<Dashboard onChanged={() => undefined} />);
-    const group = await screen.findByRole("group", { name: "Currency" });
-    expect(within(group).getByRole("button", { name: "INR" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getAllByText("INR 100.00").length).toBeGreaterThan(0);
-    await userEvent.click(within(group).getByRole("button", { name: "USD" }));
+    const select = await screen.findByRole("combobox", { name: "Currency" });
+    expect(select).toHaveValue("INR");
+    expect(await screen.findAllByText("INR 100.00")).not.toHaveLength(0);
+    await userEvent.selectOptions(select, "USD");
     await waitFor(() => expect(screen.getAllByText("USD 50.00").length).toBeGreaterThan(0));
     expect(screen.queryByText("INR 150.00")).toBeNull();
   });

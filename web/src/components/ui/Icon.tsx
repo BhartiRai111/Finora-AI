@@ -3,6 +3,11 @@ import type { SVGProps } from "react";
 // A small set of 24x24 stroke icons drawn for this app (no icon dependency). Icons are decorative by default (aria-hidden); the label next to
 // them carries the meaning. Pass `title` for the rare icon that stands alone.
 const PATHS = {
+  arrowLeft: "M19 12H5M11 6l-6 6 6 6",
+  arrowRight: "M5 12h14M13 6l6 6-6 6",
+  info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-10v6m0-9h.01",
+  swap: "M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4",
+  refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7",
   dashboard: "M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z",
   calendar: "M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z",
   list: "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",

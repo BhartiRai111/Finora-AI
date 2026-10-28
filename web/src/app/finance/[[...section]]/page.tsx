@@ -7,7 +7,9 @@ import { FinanceApp } from "@/components/finance/FinanceApp";
 import { SidebarSummary } from "@/components/finance/SidebarSummary";
 import { AppShell } from "@/components/shell/AppShell";
 import { HeaderControls } from "@/components/shell/HeaderControls";
-import { WorkspaceSwitcher } from "@/components/shell/WorkspaceSwitcher";
+import { ShellRail } from "@/components/shell/ShellRail";
+import { SidebarProfile } from "@/components/shell/SidebarProfile";
+import { TopBar } from "@/components/shell/TopBar";
 import { EmptyState } from "@/components/ui/States";
 import { FinanceProvider } from "@/lib/FinanceContext";
 import { MonthProvider } from "@/lib/month";
@@ -15,7 +17,7 @@ import { PERSONAL_SECTIONS, toNav } from "@/lib/sections";
 import { useWorkspaceContext } from "@/lib/useWorkspaceContext";
 
 const nav = toNav(PERSONAL_SECTIONS, (id) => `/finance/${id}`);
-const footLinks = [{ label: "Settings", href: "/finance/regional", icon: "settings" as const }, { label: "Help Center", href: "/help", icon: "help" as const }];
+const footLinks: { label: string; href: string; icon: "settings" | "help" }[] = [];
 
 function FinanceScreen() {
   const params = useParams<{ section?: string[] }>();
@@ -27,7 +29,7 @@ function FinanceScreen() {
   if (!ready) return <main id="main"><Loading label="Loading your personal profile…" /></main>;
   const shell = (extra: React.ReactNode, body: React.ReactNode) => (
     <AppShell contextLabel="Personal finance" badge="Private to you" eyebrow={id === "overview" ? "Personal finance workspace" : "Personal finance"} nav={nav} currentId={section ? id : ""}
-      title={section?.title ?? "Page not found"} description={section?.description} switcher={<WorkspaceSwitcher />} sidebarExtra={extra} footLinks={footLinks} actions={<HeaderControls />}>
+      title={section?.title ?? "Page not found"} description={section?.description} switcher={<SidebarProfile />} rail={<ShellRail />} topbar={<TopBar trail={["Finance", section?.title ?? "Page not found"]} />} sidebarExtra={extra} footLinks={footLinks} actions={<HeaderControls />}>
       {body}
     </AppShell>
   );

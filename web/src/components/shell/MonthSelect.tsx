@@ -1,6 +1,7 @@
 "use client";
 
 import { monthLabel, shiftMonth } from "@/lib/calendar";
+import { currentMonth } from "@/lib/finance";
 import { useMonthContext } from "@/lib/month";
 import { Icon } from "../ui/Icon";
 
@@ -13,6 +14,7 @@ export function MonthSelect() {
       <button type="button" className="icon-btn" aria-label="Previous month" onClick={() => ctx.setMonth(shiftMonth(ctx.month, -1))}><Icon name="chevronLeft" size={16} /></button>
       <span className="month-label" aria-live="polite">{monthLabel(ctx.month)}</span>
       <button type="button" className="icon-btn" aria-label="Next month" onClick={() => ctx.setMonth(shiftMonth(ctx.month, 1))}><Icon name="chevronRight" size={16} /></button>
+      <button type="button" className="reset-pill" onClick={() => ctx.setMonth(currentMonth())}><Icon name="refresh" size={14} />This month</button>
     </div>
   );
 }

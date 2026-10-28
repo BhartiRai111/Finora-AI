@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { shiftMonth } from "@/lib/calendar";
-import { compareAmounts, isNegative } from "@/lib/decimal";
-import { formatMoney, type BudgetItem, type Commitment, type CurrencyCashflow, type CurrencyNetWorth, type Goal } from "@/lib/finance";
+import { compareAmounts, isNegative, sumAmounts } from "@/lib/decimal";
+import { formatMoney, type Account, type BudgetItem, type Commitment, type CurrencyCashflow, type CurrencyNetWorth, type Goal } from "@/lib/finance";
 import { useFinance } from "@/lib/FinanceContext";
 import { useSelectedMonth } from "@/lib/month";
 import type { Report } from "@/lib/insights";
@@ -12,7 +11,6 @@ import { useDataRefresh } from "@/lib/useDataRefresh";
 import { useResource } from "@/lib/useResource";
 import { Loading } from "../Notice";
 import { ProgressBar } from "../ui/BarChart";
-import { Sparkline } from "../ui/FlowCharts";
 import { Icon, type IconName } from "../ui/Icon";
 import { EmptyState } from "../ui/States";
 import { CashFlowPanel, InsightCard, PanelError, RecentTransactions, TimeZone } from "./DashboardPanels";
@@ -45,13 +43,12 @@ function Delta({ change, currency, goodWhen, label }: { change: { amount: string
   );
 }
 
-function Stat({ icon, tone, label, value, trend, children }: { icon: IconName; tone?: "forest" | "blue" | "green" | "amber"; label: string; value: string; trend?: React.ReactNode; children?: React.ReactNode }) {
+function Stat({ icon, tone, label, value, children }: { icon: IconName; tone?: "forest" | "blue" | "green" | "amber"; label: string; value: string; children?: React.ReactNode }) {
   return (
-    <div className={`stat ${tone === "forest" ? "stat-forest" : ""}`}>
+    <div className="stat">
       <div className="stat-top"><span>{label}</span><span className={`stat-icon ${tone ?? ""}`}><Icon name={icon} /></span></div>
       <div className="stat-value">{value}</div>
       {children}
-      {trend}
     </div>
   );
 }
@@ -96,29 +93,24 @@ function DashboardMonth({ month, onChanged }: { month: string; onChanged: () => 
 
   return (
     <div className="dash">
-      {currencies.length > 1 && (
-        <div className="dash-head">
-          <p style={{ margin: 0 }}>Currencies are never added together; choose which to view.</p>
-          <div className="seg" role="group" aria-label="Currency">
-            {currencies.map((c) => <button key={c} type="button" aria-pressed={c === cur} onClick={() => setPicked(c)}>{c}</button>)}
-          </div>
-        </div>
-      )}
       {d.worth.length === 0 && <EmptyState title="Welcome to Finora">Add an account to see your balances here. Nothing on this page is example data: it fills in as you record your own money.</EmptyState>}
 
-      <SummaryCards month={month} from={d.from} to={d.to} cur={cur} worth={worth} cash={cash} />
-
-      <div className="dash-main">
-        <CashFlowPanel month={month} to={d.to} currency={cur} />
-        <SpendingPlan budgets={budgets} month={month} currency={cur} />
+      <div className="dash-top">
+        <div className="cluster"><SummaryCards from={d.from} to={d.to} cur={cur} cash={cash} budgets={budgets} /></div>
+        <BalanceCard cur={cur} currencies={currencies} onCurrency={setPicked} worth={worth} />
       </div>
+
+      <div className="dash-mid">
+        <SpendingPlan budgets={budgets} month={month} currency={cur} />
+        <CashFlowPanel month={month} to={d.to} currency={cur} />
+      </div>
+
+      <RecentTransactions from={d.from} to={d.to} />
 
       <div className="dash-main dash-main-rev">
-        <RecentTransactions from={d.from} to={d.to} />
         <GoalsPanel goals={goals} />
+        <UpcomingPayments bills={d.bills} />
       </div>
-
-      <UpcomingPayments bills={d.bills} />
 
       <InsightCard space={finance.space} />
       <TimeZone settings={d.settings} onSaved={() => { core.reload(); onChanged(); }} />
@@ -126,29 +118,70 @@ function DashboardMonth({ month, onChanged }: { month: string; onChanged: () => 
   );
 }
 
-function SummaryCards({ month, from, to, cur, worth, cash }: { month: string; from: string; to: string; cur: string; worth: CurrencyNetWorth | undefined; cash: CurrencyCashflow | undefined }) {
+/** The balance (net worth) for one currency, a currency choice when there is more than one, and the accounts the person added (balances calculated from their transactions). */
+function BalanceCard({ cur, currencies, onCurrency, worth }: { cur: string; currencies: string[]; onCurrency: (c: string) => void; worth: CurrencyNetWorth | undefined }) {
+  const finance = useFinance();
+  const accounts = useResource((signal) => finance.get<{ items: Account[] }>("/accounts", signal).then((r) => r.items.filter((a) => !a.archived)));
+  useDataRefresh(accounts.reload);
+  return (
+    <section className="cluster balance" aria-labelledby="bal-title">
+      <div className="balance-head">
+        <h3 id="bal-title">Total balance</h3>
+        {currencies.length > 1 ? (
+          <span className="select-pill">
+            <label htmlFor="dash-currency" className="visually-hidden">Currency</label>
+            <select id="dash-currency" value={cur} onChange={(e) => onCurrency(e.target.value)}>{currencies.map((c) => <option key={c} value={c}>{c}</option>)}</select>
+          </span>
+        ) : <span className="select-pill">{cur}</span>}
+      </div>
+      <div className="balance-value num">{worth ? formatMoney(worth.net_worth, cur) : "—"}</div>
+      <p className="muted">{worth ? `Assets ${formatMoney(worth.assets, cur)} · Liabilities ${formatMoney(worth.liabilities, cur)}` : "Add an account to see your balance"}{currencies.length > 1 && " · currencies are never added together"}</p>
+      <div className="balance-actions">
+        <Link href="/finance/transactions" className="btn-primary btn-link"><Icon name="swap" size={16} />Transfer</Link>
+        <Link href="/finance/accounts" className="btn-link btn-ghost"><Icon name="plus" size={16} />Add account</Link>
+      </div>
+      <div className="wallets">
+        <div className="wallets-head"><strong>Accounts</strong>{accounts.status === "ready" && <span className="muted">Total {accounts.data.length} {accounts.data.length === 1 ? "account" : "accounts"}</span>}</div>
+        {accounts.status === "loading" && <Loading label="Loading accounts…" />}
+        {accounts.status === "error" && <PanelError error={accounts.error} retry={accounts.reload} />}
+        {accounts.status === "ready" && (accounts.data.length === 0 ? <p>No accounts yet.</p> : (
+          <ul className="wallet-list">
+            {accounts.data.map((a) => (
+              <li key={a.id} className="wallet">
+                <span className="wallet-amount num">{formatMoney(a.balance, a.currency)}</span><span className="chip chip-up">Active</span>
+                <span className="muted wallet-name">{a.name} · {a.type.toLowerCase().replace(/_/g, " ")}</span>
+              </li>
+            ))}
+          </ul>
+        ))}
+        <p className="muted side-note">Added by you; not linked to a bank.</p>
+      </div>
+    </section>
+  );
+}
+
+function SummaryCards({ from, to, cur, cash, budgets }: { from: string; to: string; cur: string; cash: CurrencyCashflow | undefined; budgets: BudgetItem[] }) {
   const finance = useFinance();
   const compare = useResource((signal) => finance.get<Report>(`/finance-reports/cash-flow?from=${from}&to=${to}&granularity=MONTH&compare=previous`, signal).catch(() => null));
   useDataRefresh(compare.reload);
-  const trend = useResource((signal) => finance.get<Report>(`/finance-reports/cash-flow?from=${shiftMonth(month, -5)}-01&to=${to}&granularity=MONTH`, signal).then((r) => r.currencies.find((c) => c.currency === cur)?.rows ?? []).catch(() => []));
-  useDataRefresh(trend.reload);
   const cmp = compare.status === "ready" && compare.data?.comparison ? compare.data.comparison.currencies.find((c) => c.currency === cur) : undefined;
   const label = compare.status === "ready" && compare.data?.comparison ? `vs ${compare.data.comparison.from} to ${compare.data.comparison.to}` : "";
-  const rows = trend.status === "ready" ? trend.data : [];
-  const spark = (name: string, tone: string) => (rows.length > 1 ? <Sparkline values={rows.map((r) => r.values[name])} tone={tone} /> : null);
+  const overall = budgets.find((b) => b.category_id === null);
+  const parts = overall ? [overall] : budgets.filter((b) => b.category_id !== null);
+  const left = parts.length > 0 ? sumAmounts(parts.map((b) => b.remaining)) : null;
   return (
     <section aria-label="Financial summary" className="stat-grid">
-      <Stat tone="forest" icon="wallet" label="Available balance" value={worth ? formatMoney(worth.net_worth, cur) : "—"}>
-        <span className="stat-sub">{worth ? `Assets ${formatMoney(worth.assets, cur)} · Liabilities ${formatMoney(worth.liabilities, cur)}` : "Add an account to see your balance"}</span>
-      </Stat>
-      <Stat tone="green" icon="trendUp" label="Income" value={cash ? formatMoney(cash.income, cur) : "—"} trend={spark("income", "var(--series-1)")}>
+      <Stat tone="green" icon="trendUp" label="Income" value={cash ? formatMoney(cash.income, cur) : "—"}>
         {cash ? <Delta change={cmp?.change.income} currency={cur} goodWhen="up" label={label} /> : <span className="stat-sub">No transactions this month yet</span>}
       </Stat>
-      <Stat tone="blue" icon="trendDown" label="Spending" value={cash ? formatMoney(cash.net_expense, cur) : "—"} trend={spark("net_expense", "var(--series-4)")}>
+      <Stat tone="blue" icon="trendDown" label="Spending" value={cash ? formatMoney(cash.net_expense, cur) : "—"}>
         {cash ? <Delta change={cmp?.change.net_expense} currency={cur} goodWhen="down" label={label} /> : <span className="stat-sub">No transactions this month yet</span>}
       </Stat>
-      <Stat tone="amber" icon="target" label="Net saved" value={cash ? formatMoney(cash.net, cur) : "—"} trend={spark("net", "var(--series-2)")}>
+      <Stat tone="amber" icon="target" label="Net saved" value={cash ? formatMoney(cash.net, cur) : "—"}>
         {cash ? <Delta change={cmp?.change.net} currency={cur} goodWhen="up" label={label} /> : <span className="stat-sub">Income minus spending</span>}
+      </Stat>
+      <Stat icon="wallet" label="Budget remaining" value={left !== null ? formatMoney(left, cur) : "—"}>
+        {left !== null ? <span className="stat-sub">{overall ? "Overall budget" : `Across ${parts.length} category budget${parts.length === 1 ? "" : "s"}`}{isNegative(left) ? " · over budget" : ""}</span> : <span className="stat-sub"><Link href="/finance/budgets">Set a monthly budget</Link> to track what is left</span>}
       </Stat>
     </section>
   );

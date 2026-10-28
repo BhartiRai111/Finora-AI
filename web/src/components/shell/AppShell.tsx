@@ -26,7 +26,7 @@ function useDocumentTitle(title: string) {
  * The authenticated application frame: a collapsible sidebar of labelled, icon-led sections (a drawer on small screens), a page title with a
  * short description, and the page itself. It holds no data and makes no requests, so it cannot show anything the page did not load.
  */
-export function AppShell({ contextLabel, badge, nav, currentId, title, description, eyebrow, actions, switcher, sidebarExtra, footLinks = [], children }: {
+export function AppShell({ contextLabel, badge, nav, currentId, title, description, eyebrow, actions, topbar, rail, switcher, sidebarExtra, footLinks = [], children }: {
   contextLabel: string;
   badge?: string;
   nav: NavGroup[];
@@ -37,7 +37,11 @@ export function AppShell({ contextLabel, badge, nav, currentId, title, descripti
   eyebrow?: string;
   /** Tools at the right of the page header (search, month, export, notifications, add, account). */
   actions?: ReactNode;
-  /** The workspace switcher shown at the top of the sidebar. */
+  /** The strip above the title (back, breadcrumb, search, notifications). */
+  topbar?: ReactNode;
+  /** The slim icon column at the left edge. */
+  rail?: ReactNode;
+  /** The profile and workspace switcher shown at the top of the sidebar. */
   switcher?: ReactNode;
   /** Extra sidebar content, such as the accounts list and the budget status. */
   sidebarExtra?: ReactNode;
@@ -61,7 +65,8 @@ export function AppShell({ contextLabel, badge, nav, currentId, title, descripti
   }, [open]);
 
   return (
-    <div className={collapsed ? "shell collapsed" : "shell"}>
+    <div className={["shell", collapsed && "collapsed", rail && "has-rail"].filter(Boolean).join(" ")}>
+      {rail}
       <div className="shell-nav-toggle">
         <button type="button" aria-expanded={open} aria-controls={navId} onClick={() => setOpen((v) => !v)}>
           <Icon name={open ? "close" : "menu"} />
@@ -104,6 +109,7 @@ export function AppShell({ contextLabel, badge, nav, currentId, title, descripti
         </div>
       </nav>
       <main id="main" className="shell-main" tabIndex={-1}>
+        {topbar}
         <div className="page-head">
           <div className="page-head-text">
             <p className="eyebrow">{eyebrow ?? contextLabel}</p>

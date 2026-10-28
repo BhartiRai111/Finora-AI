@@ -25,6 +25,22 @@ export function categoryIcon(name: string | null): IconName {
  * The month's spending plan for one currency, read from the server's budgets (each already carries its spent, remaining, percentage and state).
  * The only arithmetic is the exact addition of those listed figures for the totals: the overall budget if there is one, otherwise the category budgets.
  */
+/** A half-circle gauge of how much of the month's limit is spent. The numbers are the server's; the arc only sizes the drawing (capped at a full circle). */
+function Gauge({ pct, spent, total, currency }: { pct: number; spent: string; total: string; currency: string }) {
+  const fill = Math.max(0, Math.min(100, pct));
+  const tone = pct >= 100 ? "var(--danger)" : pct >= 80 ? "var(--warning)" : "url(#gauge-fill)";
+  return (
+    <figure className="gauge">
+      <svg viewBox="0 0 220 128" role="img" aria-label={`${formatMoney(spent, currency)} spent of a ${formatMoney(total, currency)} limit, ${Math.round(pct)} percent`}>
+        <defs><linearGradient id="gauge-fill" x1="0" x2="1"><stop offset="0%" stopColor="var(--series-3)" /><stop offset="100%" stopColor="var(--series-1)" /></linearGradient></defs>
+        <path d="M20 110 A90 90 0 0 1 200 110" pathLength="100" fill="none" strokeWidth="22" strokeLinecap="round" className="gauge-track" />
+        {fill > 0 && <path d="M20 110 A90 90 0 0 1 200 110" pathLength="100" fill="none" strokeWidth="22" strokeLinecap="round" strokeDasharray={`${fill} 100`} style={{ stroke: tone }} />}
+      </svg>
+      <figcaption><span>SPENT</span><strong className="num">{formatMoney(spent, currency)}</strong></figcaption>
+    </figure>
+  );
+}
+
 export function SpendingPlan({ budgets, month, currency, manageHref = "/finance/budgets" }: { budgets: BudgetItem[]; month: string; currency: string; manageHref?: string }) {
   const overall = budgets.find((b) => b.category_id === null);
   const categories = budgets.filter((b) => b.category_id !== null);
@@ -36,13 +52,14 @@ export function SpendingPlan({ budgets, month, currency, manageHref = "/finance/
   return (
     <section className="panel" aria-labelledby="plan-title">
       <div className="panel-head">
-        <div><h3 id="plan-title">Spending plan</h3><p className="muted" style={{ margin: 0 }}>{monthLabel(month)} · {currency}</p></div>
+        <div><h3 id="plan-title">Spending limit</h3><p className="muted" style={{ margin: 0 }}>{monthLabel(month)} · {currency}</p></div>
         <Link href={manageHref}>Manage budgets</Link>
       </div>
       {total === null || spent === null || left === null ? (
         <p>No budgets are set for {monthLabel(month)} in {currency}. <Link href={manageHref}>Set a monthly budget</Link> to see your plan here.</p>
       ) : (
         <>
+          <Gauge pct={pct} spent={spent} total={total} currency={currency} />
           <div className="plan-summary">
             <div><span className="muted">Spent</span><strong className="num">{formatMoney(spent, currency)}</strong></div>
             <div><span className="muted">{overall ? "Budget" : "Total budget"}</span><strong className="num">{formatMoney(total, currency)}</strong></div>

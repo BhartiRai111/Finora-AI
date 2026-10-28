@@ -4,12 +4,14 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mockApi, problem, renderWithSession, USER } from "@/test-utils";
 import { HeaderControls } from "./HeaderControls";
+import { ShellRail } from "./ShellRail";
+import { TopBar } from "./TopBar";
 import { AddTransactionDialog as AddExpenseDialog } from "../finance/AddTransactionDialog";
 import { AppShell } from "./AppShell";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), pathname: "/finance/overview" }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: nav.push }), usePathname: () => nav.pathname }));
-beforeEach(() => { nav.push.mockClear(); nav.pathname = "/finance/overview"; window.localStorage.clear(); document.documentElement.dataset.theme = "light"; });
+beforeEach(() => { nav.push.mockClear(); nav.pathname = "/finance/overview"; window.localStorage.clear(); document.documentElement.dataset.theme = "dark"; });
 afterEach(() => vi.unstubAllGlobals());
 
 const me = { "GET /v1/me": () => ({ status: 200, body: USER }) };
@@ -26,7 +28,7 @@ describe("notifications in the top bar", () => {
       "GET /v1/spaces/p1/finance-notifications?limit=5": () => ({ status: 200, body: { items: [note("n1", unread === 0), note("n2", unread === 0)], total: 2, unread, limit: 5, offset: 0 } }),
       "POST /v1/spaces/p1/finance-notifications/read-all": () => { unread = 0; return { status: 200, body: {} }; },
     });
-    renderWithSession(<HeaderControls />);
+    renderWithSession(<TopBar trail={["Finance", "Overview"]} />);
     const bell = await screen.findByRole("button", { name: "Notifications, 2 unread" });
     await userEvent.click(bell);
     const panel = screen.getByRole("dialog", { name: "Notifications" });
@@ -44,7 +46,7 @@ describe("notifications in the top bar", () => {
   it("explains, instead of inventing a count, when the role may not read notifications", async () => {
     nav.pathname = "/workspaces/b1/overview";
     mockApi({ ...base, "GET /v1/spaces/b1/finance-notifications?limit=5": () => problem(403, "FORBIDDEN") });
-    renderWithSession(<HeaderControls />);
+    renderWithSession(<TopBar trail={["Finance", "Overview"]} />);
     await userEvent.click(await screen.findByRole("button", { name: "Notifications" }));
     expect(await screen.findByText(/does not include notifications/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "View all" })).toBeNull();
@@ -54,7 +56,7 @@ describe("notifications in the top bar", () => {
 describe("quick search and add expense", () => {
   it("filters the sections this person can open and navigates with Enter; Ctrl+K opens it anywhere", async () => {
     mockApi({ ...base, "GET /v1/spaces/p1/finance-notifications?limit=5": () => ({ status: 200, body: { items: [], total: 0, unread: 0, limit: 5, offset: 0 } }) });
-    renderWithSession(<HeaderControls />);
+    renderWithSession(<TopBar trail={["Finance", "Overview"]} />);
     await screen.findByRole("button", { name: "Search and quick actions" });
     await userEvent.keyboard("{Control>}k{/Control}");
     const dialog = await screen.findByRole("dialog", { name: "Search and quick actions" });
@@ -72,7 +74,7 @@ describe("quick search and add expense", () => {
   it("offers only what a restricted role can open, and says so when nothing matches", async () => {
     nav.pathname = "/workspaces/b1/workspace";
     mockApi({ ...base, "GET /v1/spaces/b1/finance-notifications?limit=5": () => problem(403, "FORBIDDEN") });
-    renderWithSession(<HeaderControls />);
+    renderWithSession(<TopBar trail={["Finance", "Overview"]} />);
     await userEvent.click(await screen.findByRole("button", { name: "Search and quick actions" }));
     const dialog = screen.getByRole("dialog");
     expect(within(dialog).queryByRole("option", { name: /Invoices/ })).toBeNull();
@@ -188,14 +190,14 @@ describe("sidebar", () => {
 });
 
 describe("theme", () => {
-  it("switches between light and dark from the account menu and remembers it", async () => {
+  it("switches between dark and light from the rail and remembers it", async () => {
     mockApi(me);
-    renderWithSession(<HeaderControls />);
-    await userEvent.click(await screen.findByRole("button", { name: /Asha/ }));
-    await userEvent.click(screen.getByRole("menuitem", { name: "Switch to dark theme" }));
-    expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(window.localStorage.getItem("finora.theme")).toBe("dark");
-    await userEvent.click(screen.getByRole("menuitem", { name: "Switch to light theme" }));
+    renderWithSession(<ShellRail />);
+    await userEvent.click(await screen.findByRole("button", { name: "Light theme" }));
     expect(document.documentElement.dataset.theme).toBe("light");
+    expect(window.localStorage.getItem("finora.theme")).toBe("light");
+    expect(screen.getByRole("button", { name: "Light theme" })).toHaveAttribute("aria-pressed", "true");
+    await userEvent.click(screen.getByRole("button", { name: "Dark theme" }));
+    expect(document.documentElement.dataset.theme).toBe("dark");
   });
 });

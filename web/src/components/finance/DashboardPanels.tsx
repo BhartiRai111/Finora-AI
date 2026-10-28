@@ -28,7 +28,7 @@ export function CashFlowPanel({ month, to, currency }: { month: string; to: stri
   return (
     <section className="panel" aria-labelledby="cash-title">
       <div className="panel-head">
-        <div><h3 id="cash-title">Cash flow</h3><p className="muted" style={{ margin: 0 }}>Income, spending and savings · {currency}</p></div>
+        <div><h3 id="cash-title">Cash flow</h3><p className="muted" style={{ margin: 0 }}>Income, spending and net saved · {currency}</p></div>
         <div className="seg" role="group" aria-label="Cash flow range">
           {RANGES.map((r) => <button key={r.id} type="button" aria-pressed={r.id === range} onClick={() => setRange(r.id)}>{r.id}</button>)}
         </div>
@@ -55,6 +55,7 @@ function CashFlowBody({ from, to, currency }: { from: string; to: string; curren
   const labels = rows.map((r) => r.period);
   return (
     <>
+      <p className="big-figure num" aria-label="Net saved over the period">{formatMoney(sumAmounts(net), currency)}<span className="muted"> net saved</span></p>
       <CashFlowChart currency={currency} labels={labels} income={income} spending={spending} net={net}
         summary={`Chart in ${currency}: income, spending and net savings for ${rows.length} months, from ${labels[0]} to ${labels[labels.length - 1]}.`} />
       <dl className="cash-summary">
@@ -81,7 +82,7 @@ export function RecentTransactions({ from, to }: { from: string; to: string }) {
   return (
     <section className="panel" aria-labelledby="recent-title">
       <div className="panel-head">
-        <h3 id="recent-title">Recent transactions</h3>
+        <h3 id="recent-title">Recent activities</h3>
         <Link href="/finance/transactions">View all</Link>
       </div>
       <div className="table-tools">

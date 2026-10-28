@@ -8,7 +8,6 @@ import { MonthProvider } from "@/lib/month";
 import { mockApi, renderWithSession, USER } from "@/test-utils";
 import HelpPage from "@/app/help/page";
 import { MonthSelect } from "./MonthSelect";
-import { TransactionSearch } from "./TransactionSearch";
 
 const push = vi.hoisted(() => vi.fn());
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push }), usePathname: () => "/finance/overview" }));
@@ -24,16 +23,8 @@ describe("month selector", () => {
     await userEvent.click(screen.getByRole("button", { name: "Next month" }));
     await userEvent.click(screen.getByRole("button", { name: "Next month" }));
     expect(screen.getByText("February 2026")).toBeInTheDocument();
-  });
-});
-
-describe("transaction search", () => {
-  it("opens the Transactions screen with the words, and ignores an empty search", async () => {
-    render(<TransactionSearch />);
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search transactions" }), "chai tea{Enter}");
-    expect(push).toHaveBeenCalledWith("/finance/transactions?q=chai%20tea");
-    await userEvent.type(screen.getByRole("searchbox", { name: "Search transactions" }), "{Enter}");
-    expect(push).toHaveBeenLastCalledWith("/finance/transactions");
+    await userEvent.click(screen.getByRole("button", { name: /This month/ }));
+    expect(screen.queryByText("February 2026")).toBeNull();
   });
 });
 

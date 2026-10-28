@@ -56,7 +56,7 @@ describe("AccountMenu", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("asha@example.test")).toBeInTheDocument();
     const items = screen.getAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).toEqual(["Account and security", "Settings", "Switch to dark theme", "Sign out"]);
+    expect(items.map((i) => i.textContent)).toEqual(["Account and security", "Settings", "Switch to light theme", "Sign out"]);
     expect(items[0]).toHaveFocus();
     await userEvent.keyboard("{ArrowDown}");
     expect(items[1]).toHaveFocus();

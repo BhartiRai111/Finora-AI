@@ -99,7 +99,7 @@ const j = new Journey("personal", OUT);
   // ---- imports: unsupported, invalid, partial, explicit confirmation, no double submit
   await page.getByRole("link", { name: "Imports" }).click();
   await page.getByRole("heading", { level: 1, name: "Imports" }).waitFor();
-  await page.getByLabel("Account").selectOption(setup.account);
+  await page.getByLabel("Account", { exact: true }).selectOption(setup.account);
   await page.setInputFiles("#imp-file", { name: "statement.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4") });
   await page.getByRole("button", { name: "Upload and continue" }).click();
   await j.see(page.getByText(/Only CSV files are supported/), "a PDF is refused as an import file");

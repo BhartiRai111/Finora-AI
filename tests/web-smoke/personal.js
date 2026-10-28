@@ -14,17 +14,17 @@ const j = new Journey("personal", OUT);
   // ---- authentication and navigation
   await page.goto(`${B}/finance/budgets`);
   await page.getByRole("heading", { name: "Sign in required" }).waitFor();
-  const href = await page.getByRole("link", { name: "sign in" }).getAttribute("href");
+  const href = await page.getByRole("main").getByRole("link", { name: "sign in" }).getAttribute("href");
   await j.must(href.includes("next=%2Ffinance%2Fbudgets"), "an anonymous visitor to a protected route is asked to sign in and the link keeps the destination");
   await j.must(page.getByRole("navigation", { name: /sections/ }).count().then((n) => n === 0), "no protected navigation is shown to an anonymous visitor");
   await page.goto(`${B}/register`);
   await register(page, "Smoke Tester", email);
   await page.goto(`${B}/login?next=%2Ffinance%2Fbudgets`);
   await page.waitForURL("**/finance/budgets", { timeout: 15000 });
-  await j.see(page.getByRole("heading", { level: 1, name: "Budgets" }), "a signed-in person who opens the sign-in link returns to the intended section");
+  await j.see(page.getByRole("heading", { level: 1, name: "Budget planner" }), "a signed-in person who opens the sign-in link returns to the intended section");
   await j.see(page.getByRole("navigation", { name: "Personal finance sections" }), "the section navigation is present");
   await j.must(page.getByRole("link", { name: "Budgets" }).getAttribute("aria-current").then((v) => v === "page"), "the current section is marked");
-  await page.waitForFunction(() => document.title === "Budgets · Personal finance · Finora AI", null, { timeout: 10000 }).catch(async (e) => { throw new Error(`title was "${await page.title()}": ${e.message.split("\n")[0]}`); });
+  await page.waitForFunction(() => document.title === "Budget planner · Personal finance · Finora AI", null, { timeout: 10000 }).catch(async (e) => { throw new Error(`title was "${await page.title()}": ${e.message.split("\n")[0]}`); });
   j.ok("the document title names the page");
   await page.goto(`${B}/login?next=https%3A%2F%2Fevil.example%2F`);
   await page.waitForURL(/\/workspaces$/, { timeout: 15000 });
@@ -52,10 +52,10 @@ const j = new Journey("personal", OUT);
   await j.must(Promise.resolve(setup.out.every((s) => s === 201)), "five transactions were created through the real backend");
 
   await page.getByRole("link", { name: "Overview" }).click();
-  await page.getByRole("heading", { level: 1, name: "Personal finance overview" }).waitFor();
+  await page.getByRole("heading", { level: 1, name: "Overview" }).waitFor();
   await j.see(page.getByText("INR 10,579.25").first(), "the overview shows the server's net worth (opening balance plus the recorded transactions: INR 10,579.25)");
 
-  await page.getByRole("link", { name: "Reports" }).click();
+  await page.getByRole("link", { name: "Analytics & Reports" }).click();
   await page.waitForURL("**/finance/reports");
   await page.locator("#rep-from").fill("2026-01-01");
   await page.locator("#rep-to").fill("2026-02-28");
@@ -63,11 +63,11 @@ const j = new Journey("personal", OUT);
   await page.getByRole("img", { name: /Bar chart in INR/ }).waitFor({ timeout: 15000 });
   await j.see(page.getByRole("cell", { name: "INR 6,500.50" }).first(), "the report draws a chart and the table shows the exact backend figure");
   await page.reload();
-  await page.getByRole("heading", { level: 1, name: "Reports and forecast" }).waitFor();
+  await page.getByRole("heading", { level: 1, name: "Analytics and reports" }).waitFor();
   j.ok("a reload on a deep link restores the session and the page");
 
   // ---- assistant: supported, unsupported, hostile, honest AI state
-  await page.getByRole("link", { name: "Assistant", exact: true }).click();
+  await page.getByRole("link", { name: "AI Insights", exact: true }).click();
   await page.getByText(/Read-only: the assistant cannot change, pay, file or cancel anything/).waitFor();
   await j.see(page.getByText(/AI explanations: not configured/).first(), "the assistant says no AI provider is configured");
   await page.getByLabel("Your question").fill("How much did I spend last month?");
@@ -177,8 +177,54 @@ const j = new Journey("personal", OUT);
   await page.getByRole("button", { name: "Check for alerts now" }).waitFor();
   j.ok("the failed screen recovers with Try again once the service is back");
 
+  // ---- the redesigned shell: calendar, top-bar actions, notifications, search, sidebar and theme
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.getByRole("link", { name: "Calendar", exact: true }).click();
+  await page.getByRole("heading", { level: 1, name: "Calendar and planner" }).waitFor();
+  await page.getByRole("button", { name: "Previous month" }).click();
+  const septCell = page.getByRole("button", { name: /5 September 2026, 1 transaction, spent INR 321\.00/ });
+  await j.see(septCell, "the calendar shows last month's real expense with its exact day total (INR 321.00)");
+  await septCell.click();
+  await j.see(page.getByRole("list", { name: "Transactions on this day" }).getByText("Smoke"), "selecting the date lists that day's transaction from the server");
+  await page.getByRole("button", { name: "Add expense on this date" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add an expense" });
+  await dialog.getByLabel("Date").waitFor();
+  await j.must(dialog.getByLabel("Date").inputValue().then((v) => v === "2026-09-05"), "the add-expense form opens with the selected date");
+  await dialog.getByLabel(/^Amount/).fill("10.25");
+  await dialog.getByLabel("Description").fill("Calendar coffee");
+  await dialog.getByRole("button", { name: "Save expense" }).click();
+  await dialog.waitFor({ state: "hidden" });
+  await j.see(page.getByRole("button", { name: /5 September 2026, 2 transactions, spent INR 331\.25/ }), "after saving, the day total is read again from the server (INR 331.25)");
+  await j.must(Promise.resolve((await api(page, "GET", `/v1/spaces/${setup.space}/transactions`)).body.items.length === 8), "exactly one transaction was created by the form");
+  await page.getByRole("button", { name: /Add expense/ }).first().click();
+  const topDialog = page.getByRole("dialog", { name: "Add an expense" });
+  await topDialog.getByLabel(/^Amount/).fill("abc");
+  await topDialog.getByRole("button", { name: "Save expense" }).click();
+  await j.see(topDialog.getByText("Enter an amount like 1250.50."), "the top-bar Add expense form validates before sending");
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: /^Notifications/ }).click();
+  await j.see(page.getByRole("dialog", { name: "Notifications" }).getByText(/Notifications appear in the app only/), "the notifications dropdown opens and says nothing is delivered elsewhere");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Control+k");
+  await page.getByRole("dialog").getByRole("combobox").fill("budg");
+  await page.keyboard.press("Enter");
+  await page.waitForURL("**/finance/budgets");
+  j.ok("quick search (Ctrl+K) finds a section and opens it");
+  await page.getByRole("button", { name: "Collapse sidebar" }).click();
+  await j.must(page.evaluate(() => document.querySelector(".shell.collapsed") !== null), "the sidebar collapses to icons");
+  await page.reload();
+  await j.must(page.getByRole("button", { name: "Expand sidebar" }).waitFor().then(() => true), "the collapsed state is remembered after a reload");
+  await page.getByRole("button", { name: "Expand sidebar" }).click();
+  await page.getByRole("button", { name: /Smoke Tester/ }).click();
+  await page.getByRole("menuitem", { name: "Switch to light theme" }).click();
+  await j.must(page.evaluate(() => document.documentElement.dataset.theme === "light"), "the light theme can be chosen");
+  await page.waitForTimeout(600); // colours transition for a moment after a theme change
+  await page.screenshot({ path: `${j.out}/personal-light.png` });
+  await page.getByRole("menuitem", { name: "Switch to dark theme" }).click();
+  await page.keyboard.press("Escape");
+
   // ---- account menu and small screen
-  await page.getByRole("button", { name: "Smoke Tester" }).click();
+  await page.getByRole("button", { name: /Smoke Tester/ }).click();
   await j.see(page.getByRole("menuitem", { name: "Sign out" }), "the account menu opens");
   await page.keyboard.press("Escape");
   await j.must(page.getByRole("menu").count().then((n) => n === 0), "Escape closes the account menu");

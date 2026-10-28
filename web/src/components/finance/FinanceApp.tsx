@@ -11,11 +11,12 @@ import { Loading, Notice } from "../Notice";
 import { EmptyState } from "../ui/States";
 import { api } from "@/lib/api";
 import { AccountsPanel } from "./AccountsPanel";
+import { CalendarPlanner } from "./CalendarPlanner";
 import { BudgetsPanel } from "./BudgetsPanel";
 import { CategoriesPanel } from "./CategoriesPanel";
 import { CommitmentsPanel } from "./CommitmentsPanel";
 import { GoalsPanel } from "./GoalsPanel";
-import { OverviewPanel } from "./OverviewPanel";
+import { Dashboard } from "./Dashboard";
 import { RecurringPanel } from "./RecurringPanel";
 import { TransactionsPanel } from "./TransactionsPanel";
 import { AlertsPanel } from "../platform/AlertsPanel";
@@ -101,7 +102,8 @@ function FinanceShell({ section, onSectionChange }: { section?: string; onSectio
         {needsAccount && open.length === 0 && tab !== "bills" && tab !== "subscriptions" && (
           <Notice kind="info">Add an account on the Accounts tab before recording transactions.</Notice>
         )}
-        {tab === "overview" && <OverviewPanel onChanged={base.reload} />}
+        {tab === "overview" && <Dashboard onChanged={base.reload} />}
+        {tab === "calendar" && <CalendarPlanner />}
         {tab === "accounts" && <AccountsPanel accounts={accounts} onChanged={base.reload} />}
         {tab === "transactions" && open.length > 0 && <TransactionsPanel accounts={accounts} categories={categories} onChanged={base.reload} />}
         {tab === "recurring" && open.length > 0 && <RecurringPanel accounts={accounts} />}

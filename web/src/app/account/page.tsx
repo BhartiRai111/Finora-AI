@@ -147,7 +147,7 @@ function PasswordChange() {
 export default function AccountPage() {
   return (
     <AuthGate>
-      <main id="main">
+      <main id="main" className="page-narrow">
         <h1>Your account</h1>
         <Profile />
         <Mfa />

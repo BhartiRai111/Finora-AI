@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "@/lib/api";
+import { shiftMonth, monthLabel } from "@/lib/calendar";
+import { sumAmounts } from "@/lib/decimal";
 import { CURRENCIES, currentMonth, formatMoney, validateAmountText, type BudgetItem, type Category } from "@/lib/finance";
 import { useFinance } from "@/lib/FinanceContext";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
+import { ProgressBar } from "../ui/BarChart";
+import { Icon } from "../ui/Icon";
 
 const STATUS_TEXT: Record<BudgetItem["status"], string> = { UNDER: "On track", WARNING: "Close to the limit", OVER: "Over budget" };
 
@@ -13,6 +17,14 @@ export function BudgetsPanel({ categories }: { categories: Category[] }) {
   const finance = useFinance();
   const [month, setMonth] = useState(currentMonth());
   const list = useResource((signal) => api<{ month: string; items: BudgetItem[] }>(`/v1/spaces/${finance.space}/budgets?month=${month}`, { signal }));
+  // Choosing another month asks the server for that month.
+  const shown = useRef(month);
+  useEffect(() => {
+    if (shown.current !== month) {
+      shown.current = month;
+      list.reload();
+    }
+  });
   const [categoryId, setCategoryId] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("INR");
@@ -56,8 +68,11 @@ export function BudgetsPanel({ categories }: { categories: Category[] }) {
 
   return (
     <>
-      <div className="row">
-        <label htmlFor="budget-month">Month</label>
+      <div className="row" style={{ marginBottom: "1rem" }}>
+        <button type="button" className="icon-btn" aria-label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}><Icon name="chevronLeft" /></button>
+        <strong aria-live="polite" style={{ minWidth: "10rem", textAlign: "center" }}>{monthLabel(month)}</strong>
+        <button type="button" className="icon-btn" aria-label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}><Icon name="chevronRight" /></button>
+        <label htmlFor="budget-month" className="visually-hidden">Month</label>
         <input id="budget-month" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
       </div>
       {error && <Notice>{error}</Notice>}
@@ -69,13 +84,14 @@ export function BudgetsPanel({ categories }: { categories: Category[] }) {
         </>
       )}
       {list.status === "ready" && list.data.items.length === 0 && <p>No budgets yet. Set a monthly limit for a category, or one overall budget.</p>}
+      {list.status === "ready" && list.data.items.length > 0 && <BudgetTotals items={list.data.items} />}
       {list.status === "ready" && list.data.items.length > 0 && (
         <ul className="cards" aria-label="Budgets">
           {list.data.items.map((b) => (
             <li key={b.id} className="card column">
               <strong>{b.category_name ?? "Everything"}</strong>
               <span>{formatMoney(b.spent, b.currency)} of {formatMoney(b.amount, b.currency)} ({b.percent_used}%)</span>
-              <progress max={100} value={Math.min(100, Number(b.percent_used))} aria-label={`${b.category_name ?? "Overall"} budget used`} />
+              <ProgressBar percent={Number(b.percent_used)} tone={b.status === "OVER" ? "over" : b.status === "WARNING" ? "warning" : "under"} label={`${b.category_name ?? "Overall"} budget used`} />
               <span className={`status status-${b.status.toLowerCase()}`}>{STATUS_TEXT[b.status]} — {formatMoney(b.remaining, b.currency)} left</span>
               <div className="row">
                 <RaiseForm budget={b} onSave={(v) => void raise(b, v)} />
@@ -85,7 +101,7 @@ export function BudgetsPanel({ categories }: { categories: Category[] }) {
           ))}
         </ul>
       )}
-      <form onSubmit={create} aria-labelledby="budget-title" noValidate>
+      <form onSubmit={create} aria-labelledby="budget-title" noValidate className="panel" style={{ maxWidth: "30rem" }}>
         <h2 id="budget-title">Set a monthly budget</h2>
         <label htmlFor="budget-category">Category</label>
         <select id="budget-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
@@ -112,5 +128,31 @@ function RaiseForm({ budget, onSave }: { budget: BudgetItem; onSave: (value: str
       <input id={`b-${budget.id}`} value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" size={10} />
       <button type="button" className="link" onClick={() => onSave(value)}>Change limit</button>
     </span>
+  );
+}
+
+/** Totals per currency across the month's budgets: an overall budget if there is one, otherwise the sum of the category budgets (exact addition of the listed figures). */
+function BudgetTotals({ items }: { items: BudgetItem[] }) {
+  const currencies = [...new Set(items.map((b) => b.currency))];
+  return (
+    <div className="stat-grid" aria-label="Budget totals">
+      {currencies.map((cur) => {
+        const mine = items.filter((b) => b.currency === cur);
+        const overall = mine.find((b) => b.category_id === null);
+        const parts = overall ? [overall] : mine;
+        const total = sumAmounts(parts.map((b) => b.amount));
+        const spent = sumAmounts(parts.map((b) => b.spent));
+        const left = sumAmounts(parts.map((b) => b.remaining));
+        const pct = Number(total) > 0 ? (Number(spent) / Number(total)) * 100 : 0;
+        return (
+          <div key={cur} className="stat">
+            <div className="stat-top"><span>{overall ? "Overall budget" : `Total of ${parts.length} budget${parts.length === 1 ? "" : "s"}`} ({cur})</span></div>
+            <div className="stat-value">{formatMoney(left, cur)} left</div>
+            <ProgressBar percent={pct} tone={pct >= 100 ? "over" : pct >= 80 ? "warning" : "under"} label={`${cur} budget used`} />
+            <span className="stat-sub">{formatMoney(spent, cur)} spent of {formatMoney(total, cur)}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }

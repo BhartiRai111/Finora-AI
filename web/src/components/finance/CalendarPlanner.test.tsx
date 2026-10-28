@@ -103,12 +103,12 @@ describe("calendar (mocked fetch)", () => {
     }));
     wrap(<CalendarPlanner />);
     await userEvent.click(await screen.findByRole("button", { name: /Tuesday, 10 March 2026/ }));
-    await userEvent.click(screen.getByRole("button", { name: "Add expense on this date" }));
-    const dialog = await screen.findByRole("dialog", { name: "Add an expense" });
+    await userEvent.click(screen.getByRole("button", { name: "Add transaction on this date" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add a transaction" });
     expect(await within(dialog).findByLabelText("Date")).toHaveValue("2026-03-10");
     await userEvent.type(within(dialog).getByLabelText(/^Amount/), "75.00");
     await userEvent.type(within(dialog).getByLabelText("Description"), "New lunch");
-    await userEvent.click(within(dialog).getByRole("button", { name: "Save expense" }));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Save transaction" }));
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(bodies[0]).toMatchObject({ kind: "EXPENSE", account_id: "a1", amount: "75.00", occurred_on: "2026-03-10", payee: "New lunch" });
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());

@@ -37,8 +37,9 @@ type TabId = string;
  * Finds the signed-in user's personal workspace; personal finance is private to it. Used on its own it shows its own tabs; given a
  * `section` (the application shell does this) it renders only that section and navigation is the shell's job.
  */
-export function FinanceApp({ section, onSectionChange }: { section?: string; onSectionChange?: (id: string) => void } = {}) {
-  const workspaces = useResource((signal) => api<{ items: Workspace[] }>("/v1/workspaces", { signal }));
+export function FinanceApp({ section, onSectionChange, space }: { section?: string; onSectionChange?: (id: string) => void; space?: string } = {}) {
+  const workspaces = useResource((signal) => (space ? Promise.resolve({ items: [] as Workspace[] }) : api<{ items: Workspace[] }>("/v1/workspaces", { signal })));
+  if (space) return <FinanceProvider space={space}><FinanceShell section={section} onSectionChange={onSectionChange} /></FinanceProvider>;
   if (workspaces.status === "loading") return <Loading label="Loading your personal profile…" />;
   if (workspaces.status === "error") {
     return (

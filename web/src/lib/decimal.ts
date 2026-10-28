@@ -67,3 +67,16 @@ export function percentOf(part: string, whole: string): number | null {
   const ay = y < 0n ? -y : y;
   return Number(sign * ((ax * 200n + ay) / (ay * 2n)));
 }
+
+/** The mean of decimal strings, exact until the final rounding (half away from zero) to `decimals` places. "0" for no values. */
+export function averageAmount(values: string[], decimals = 2): string {
+  const parsed = values.map(parse).filter((p): p is Parsed => p !== null);
+  if (parsed.length === 0) return "0";
+  const scale = Math.max(...parsed.map((p) => p.scale));
+  const total = parsed.reduce((acc, p) => acc + toScale(p, scale), 0n);
+  const num = total * 10n ** BigInt(decimals);
+  const den = BigInt(parsed.length) * 10n ** BigInt(scale);
+  const abs = (num < 0n ? -num : num);
+  const q = (abs * 2n + den) / (den * 2n);
+  return format(num < 0n ? -q : q, decimals);
+}

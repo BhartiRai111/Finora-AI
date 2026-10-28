@@ -11,7 +11,7 @@ const H = 240;
 const PAD = { top: 14, right: 10, bottom: 40, left: 112 };
 
 /** The drawing width follows the box it sits in, so axis text stays at its real pixel size instead of shrinking with the page. */
-function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
+export function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
   const ref = useRef<HTMLDivElement>(null);
   const [w, setW] = useState(DEFAULT_W);
   useEffect(() => {
@@ -27,7 +27,7 @@ function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
   return [ref, w];
 }
 
-function numberOf(v: string | undefined): number {
+export function numberOf(v: string | undefined): number {
   if (v === undefined || v === "") return 0;
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -45,16 +45,16 @@ function extreme(series: ChartSeries[], pick: "max" | "min"): string | undefined
   return best;
 }
 
-export function Legend({ series }: { series: { key: string; label: string }[] }) {
+export function Legend({ series, colors = SERIES_COLORS }: { series: { key: string; label: string }[]; colors?: string[] }) {
   return (
     <ul className="legend" aria-label="Legend">
-      {series.map((s, i) => <li key={s.key}><span className="swatch" style={{ background: SERIES_COLORS[i % SERIES_COLORS.length] }} aria-hidden="true" />{s.label}</li>)}
+      {series.map((s, i) => <li key={s.key}><span className="swatch" style={{ background: colors[i % colors.length] }} aria-hidden="true" />{s.label}</li>)}
     </ul>
   );
 }
 
 /** A hover tooltip listing every series at one label, with exact backend figures. Purely visual: the same figures are in the table or list beside each chart. */
-function Tip({ leftPct, label, rows, currency }: { leftPct: number; label: string; rows: { key: string; label: string; value: string | undefined; color: string }[]; currency: string }) {
+export function Tip({ leftPct, label, rows, currency }: { leftPct: number; label: string; rows: { key: string; label: string; value: string | undefined; color: string }[]; currency: string }) {
   return (
     <div className="chart-tip" role="presentation" style={{ left: `${Math.min(80, Math.max(2, leftPct))}%`, top: 0 }}>
       <strong>{label}</strong>

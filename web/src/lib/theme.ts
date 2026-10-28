@@ -7,12 +7,12 @@ const KEY = "finora.theme";
 const listeners = new Set<() => void>();
 
 function current(): Theme {
-  return document.documentElement.dataset.theme === "light" ? "light" : "dark";
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
 }
 
-/** The colour theme: dark by default, light on request. Remembered in this browser only (a per-person convenience, never data). */
+/** The colour theme: light by default, dark on request. Remembered in this browser only (a per-person convenience, never data). */
 export function useTheme(): [Theme, (next: Theme) => void] {
-  const theme = useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, current, () => "dark" as Theme);
+  const theme = useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l); }, current, () => "light" as Theme);
   const set = useCallback((next: Theme) => {
     document.documentElement.dataset.theme = next;
     try {
@@ -26,4 +26,4 @@ export function useTheme(): [Theme, (next: Theme) => void] {
 }
 
 /** Applies the remembered theme before first paint (inlined in the document head by the root layout). */
-export const THEME_BOOT_SCRIPT = "try{if(localStorage.getItem('finora.theme')==='light')document.documentElement.dataset.theme='light'}catch(e){}";
+export const THEME_BOOT_SCRIPT = "try{if(localStorage.getItem('finora.theme')==='dark')document.documentElement.dataset.theme='dark'}catch(e){}";

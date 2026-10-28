@@ -626,7 +626,7 @@ a.icon-btn:hover { background: var(--surface-3); color: var(--text); }
 @media (max-width: 480px) { .stat-grid { grid-template-columns: minmax(0, 1fr); } .balance-actions { grid-template-columns: minmax(0, 1fr); } .balance-value { font-size: 1.8rem; } }
 
 /* refinements from the first render against the reference */
-.shell-context { display: none; }
+.shell-context strong, .shell-context br { display: none; }
 .shell-description { max-width: 26rem; }
 @media (min-width: 1200px) { .head-tools { flex-wrap: nowrap; } .page-head-text { flex: 1 1 10rem; } }
 @media (max-width: 900px) {

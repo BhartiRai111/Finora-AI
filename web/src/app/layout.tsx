@@ -19,15 +19,19 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en" data-theme="dark" suppressHydrationWarning>
+    <html lang="en" data-theme="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
       </head>
       <body>
         <SessionProvider>
           <a href="#main" className="skip-link">Skip to main content</a>
-          <Header />
-          {children}
+          <div className="app-frame">
+            <div className="app-surface">
+              <Header />
+              {children}
+            </div>
+          </div>
         </SessionProvider>
       </body>
     </html>

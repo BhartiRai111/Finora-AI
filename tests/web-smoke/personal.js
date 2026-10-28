@@ -55,7 +55,7 @@ const j = new Journey("personal", OUT);
   await page.getByRole("heading", { level: 1, name: "Overview" }).waitFor();
   await j.see(page.getByText("INR 10,579.25").first(), "the overview shows the server's net worth (opening balance plus the recorded transactions: INR 10,579.25)");
 
-  await page.getByRole("link", { name: "Analytics & Reports" }).click();
+  await page.getByRole("link", { name: "Reports", exact: true }).click();
   await page.waitForURL("**/finance/reports");
   await page.locator("#rep-from").fill("2026-01-01");
   await page.locator("#rep-to").fill("2026-02-28");
@@ -186,21 +186,21 @@ const j = new Journey("personal", OUT);
   await j.see(septCell, "the calendar shows last month's real expense with its exact day total (INR 321.00)");
   await septCell.click();
   await j.see(page.getByRole("list", { name: "Transactions on this day" }).getByText("Smoke"), "selecting the date lists that day's transaction from the server");
-  await page.getByRole("button", { name: "Add expense on this date" }).click();
-  const dialog = page.getByRole("dialog", { name: "Add an expense" });
+  await page.getByRole("button", { name: "Add transaction on this date" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a transaction" });
   await dialog.getByLabel("Date").waitFor();
-  await j.must(dialog.getByLabel("Date").inputValue().then((v) => v === "2026-09-05"), "the add-expense form opens with the selected date");
+  await j.must(dialog.getByLabel("Date").inputValue().then((v) => v === "2026-09-05"), "the add-transaction form opens with the selected date");
   await dialog.getByLabel(/^Amount/).fill("10.25");
   await dialog.getByLabel("Description").fill("Calendar coffee");
-  await dialog.getByRole("button", { name: "Save expense" }).click();
+  await dialog.getByRole("button", { name: "Save transaction" }).click();
   await dialog.waitFor({ state: "hidden" });
   await j.see(page.getByRole("button", { name: /5 September 2026, 2 transactions, spent INR 331\.25/ }), "after saving, the day total is read again from the server (INR 331.25)");
   await j.must(Promise.resolve((await api(page, "GET", `/v1/spaces/${setup.space}/transactions`)).body.items.length === 8), "exactly one transaction was created by the form");
-  await page.getByRole("button", { name: /Add expense/ }).first().click();
-  const topDialog = page.getByRole("dialog", { name: "Add an expense" });
+  await page.getByRole("button", { name: /Add transaction/ }).first().click();
+  const topDialog = page.getByRole("dialog", { name: "Add a transaction" });
   await topDialog.getByLabel(/^Amount/).fill("abc");
-  await topDialog.getByRole("button", { name: "Save expense" }).click();
-  await j.see(topDialog.getByText("Enter an amount like 1250.50."), "the top-bar Add expense form validates before sending");
+  await topDialog.getByRole("button", { name: "Save transaction" }).click();
+  await j.see(topDialog.getByText("Enter an amount like 1250.50."), "the top-bar Add transaction form validates before sending");
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: /^Notifications/ }).click();
   await j.see(page.getByRole("dialog", { name: "Notifications" }).getByText(/Notifications appear in the app only/), "the notifications dropdown opens and says nothing is delivered elsewhere");
@@ -216,12 +216,39 @@ const j = new Journey("personal", OUT);
   await j.must(page.getByRole("button", { name: "Expand sidebar" }).waitFor().then(() => true), "the collapsed state is remembered after a reload");
   await page.getByRole("button", { name: "Expand sidebar" }).click();
   await page.getByRole("button", { name: /Smoke Tester/ }).click();
-  await page.getByRole("menuitem", { name: "Switch to light theme" }).click();
-  await j.must(page.evaluate(() => document.documentElement.dataset.theme === "light"), "the light theme can be chosen");
-  await page.waitForTimeout(600); // colours transition for a moment after a theme change
-  await page.screenshot({ path: `${j.out}/personal-light.png` });
   await page.getByRole("menuitem", { name: "Switch to dark theme" }).click();
+  await j.must(page.evaluate(() => document.documentElement.dataset.theme === "dark"), "the dark theme can be chosen (light is the default)");
+  await page.waitForTimeout(600); // colours transition for a moment after a theme change
+  await page.screenshot({ path: `${j.out}/personal-dark.png` });
+  await page.getByRole("menuitem", { name: "Switch to light theme" }).click();
   await page.keyboard.press("Escape");
+
+  // ---- the sage dashboard: month selector, header search, sections and layout at three widths
+  await page.goto(`${B}/finance/overview`);
+  await page.getByRole("heading", { level: 1, name: "Overview" }).waitFor();
+  await j.see(page.getByRole("heading", { name: "Cash flow" }), "the overview shows the cash flow panel");
+  await j.see(page.getByRole("heading", { name: "Spending plan" }), "the overview shows the spending plan");
+  await j.see(page.getByRole("heading", { name: "Recent transactions" }), "the overview shows recent transactions");
+  await j.see(page.getByRole("link", { name: "Help Center" }), "the sidebar links to the Help Center");
+  await page.getByRole("button", { name: "Previous month" }).first().click();
+  await j.see(page.getByText("September 2026").first(), "the header month selector moves to the previous month");
+  await page.getByRole("searchbox", { name: "Search transactions" }).fill("Calendar coffee");
+  await page.keyboard.press("Enter");
+  await page.waitForURL("**/finance/transactions?q=*");
+  await j.see(page.getByText("Calendar coffee").first(), "the header search opens Transactions with the words already searched");
+  for (const [name, w, h] of [["desktop", 1440, 900], ["tablet", 820, 1100], ["mobile", 390, 844]]) {
+    await page.setViewportSize({ width: w, height: h });
+    for (const path of ["overview", "calendar", "budgets"]) {
+      await page.goto(`${B}/finance/${path}`);
+      await page.getByRole("heading", { level: 1 }).waitFor();
+      await page.waitForTimeout(500);
+      await j.must(page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `${path} has no horizontal overflow at ${name} width`);
+      await page.screenshot({ path: `${j.out}/sage-${path}-${name}.png`, fullPage: true });
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`${B}/help`);
+  await j.see(page.getByRole("heading", { level: 1, name: "How Finora AI works" }), "the Help Center page exists and is real guidance");
 
   // ---- account menu and small screen
   await page.getByRole("button", { name: /Smoke Tester/ }).click();

@@ -7,11 +7,12 @@ import { dayLabel, monthCells, monthLabel, monthOf, shiftMonth, weekdayNames } f
 import { sumAmounts } from "@/lib/decimal";
 import { formatMoney, type Category, type Commitment, type RecurringRule, type Transaction } from "@/lib/finance";
 import { useFinance } from "@/lib/FinanceContext";
+import { useSelectedMonth } from "@/lib/month";
 import { useMonthTransactions } from "@/lib/useMonthTransactions";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
 import { Icon } from "../ui/Icon";
-import { AddExpenseDialog } from "./AddExpenseDialog";
+import { AddTransactionDialog } from "./AddTransactionDialog";
 
 type Due = { key: string; label: string; amount: string; currency: string; kind: "Bill" | "Subscription" | "Recurring" };
 
@@ -52,7 +53,7 @@ export function CalendarPlanner() {
 
 function Planner({ today, timezone }: { today: string; timezone: string }) {
   const finance = useFinance();
-  const [month, setMonth] = useState(monthOf(today));
+  const [month, setMonth] = useSelectedMonth(monthOf(today));
   const [selected, setSelected] = useState(today);
   const [view, setView] = useState<"month" | "agenda">("month");
   const [adding, setAdding] = useState(false);
@@ -123,7 +124,7 @@ function Planner({ today, timezone }: { today: string; timezone: string }) {
             <button type="button" aria-pressed={view === "agenda"} onClick={() => setView("agenda")}>Agenda</button>
           </div>
           <span className="spacer" style={{ flex: 1 }} />
-          <button type="button" className="btn-primary" onClick={() => setAdding(true)} aria-haspopup="dialog"><Icon name="plus" />Add expense</button>
+          <button type="button" className="btn-primary" onClick={() => setAdding(true)} aria-haspopup="dialog"><Icon name="plus" />Add transaction</button>
         </div>
         {tx.status === "loading" && <Loading label="Loading this month's transactions…" />}
         {tx.status === "error" && <><Notice>{describeError(tx.error)}</Notice><button type="button" onClick={tx.reload}>Try again</button></>}
@@ -178,7 +179,7 @@ function Planner({ today, timezone }: { today: string; timezone: string }) {
       <section className="panel" aria-labelledby="cal-day-title">
         <div className="panel-head">
           <h3 id="cal-day-title">{dayLabel(selected)}</h3>
-          <button type="button" onClick={() => setAdding(true)}><Icon name="plus" />Add expense on this date</button>
+          <button type="button" onClick={() => setAdding(true)}><Icon name="plus" />Add transaction on this date</button>
         </div>
         {tx.status === "ready" && (
           <p>
@@ -195,7 +196,7 @@ function Planner({ today, timezone }: { today: string; timezone: string }) {
         )}
         <p><Link href="/finance/transactions">Open all transactions</Link> to edit or remove one.</p>
       </section>
-      <AddExpenseDialog open={adding} space={finance.space} date={selected} onClose={() => setAdding(false)} />
+      <AddTransactionDialog open={adding} space={finance.space} date={selected} onClose={() => setAdding(false)} />
     </div>
   );
 }

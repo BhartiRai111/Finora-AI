@@ -8,6 +8,7 @@ import { ReasonDialog } from "../ui/Dialog";
 import { AccessDenied, EmptyState, ErrorState, Skeleton } from "../ui/States";
 import { AccountMenu } from "./AccountMenu";
 import { AppShell } from "./AppShell";
+import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 
 const nav = vi.hoisted(() => ({ push: vi.fn(), pathname: "/finance/budgets" }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: nav.push }), usePathname: () => nav.pathname }));
@@ -55,7 +56,7 @@ describe("AccountMenu", () => {
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("asha@example.test")).toBeInTheDocument();
     const items = screen.getAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).toEqual(["Account and security", "Settings", "Switch to light theme", "Sign out"]);
+    expect(items.map((i) => i.textContent)).toEqual(["Account and security", "Settings", "Switch to dark theme", "Sign out"]);
     expect(items[0]).toHaveFocus();
     await userEvent.keyboard("{ArrowDown}");
     expect(items[1]).toHaveFocus();
@@ -81,7 +82,10 @@ describe("AccountMenu", () => {
 describe("Header", () => {
   const WS = { items: [{ id: "p1", name: "Asha", type: "PERSONAL", role: "OWNER", membership_id: "m" }, { id: "b1", name: "Acme", type: "BUSINESS", role: "OWNER", membership_id: "m" }] };
 
-  it("follows the page: the personal profile on /finance, and switching goes to the right area", async () => {
+  beforeEach(() => { nav.pathname = "/workspaces"; });
+  afterEach(() => { nav.pathname = "/finance/budgets"; });
+
+  it("shows the personal profile first, and switching goes to the right area", async () => {
     mockApi({ ...me, "GET /v1/workspaces": () => ({ status: 200, body: WS }) });
     renderWithSession(<Header />);
     const select = await screen.findByLabelText("Active workspace");
@@ -90,7 +94,7 @@ describe("Header", () => {
     expect(nav.push).toHaveBeenCalledWith("/workspaces/b1");
     await userEvent.selectOptions(select, "p1");
     expect(nav.push).toHaveBeenLastCalledWith("/finance");
-    expect(screen.getByRole("link", { name: "Personal finance" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("link", { name: "Workspaces" })).toHaveAttribute("aria-current", "page");
   });
 
   it("fetches the workspace list again when the page is on a workspace created after it was loaded", async () => {
@@ -101,7 +105,7 @@ describe("Header", () => {
     });
     nav.pathname = "/workspaces/b1/assistant";
     try {
-      renderWithSession(<Header />);
+      renderWithSession(<WorkspaceSwitcher />);
       const select = await screen.findByLabelText("Active workspace");
       await waitFor(() => expect(select).toHaveValue("b1"));
       // once for the first load, once because the page is on an unknown workspace, and once more when the list changed; never an endless loop

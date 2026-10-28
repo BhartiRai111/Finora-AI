@@ -46,6 +46,13 @@ const PATHS = {
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
   filter: "M4 5h16l-6 8v6l-4-2v-4L4 5Z",
   alert: "M12 4 2.5 20h19L12 4Zm0 6v5m0 3h.01",
+  download: "M12 4v12m0 0 5-5m-5 5-5-5M4 20h16",
+  help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-1.5-12a2 2 0 1 1 3 1.7c-.9.5-1.5 1-1.5 2m0 3h.01",
+  home: "M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8Z",
+  piggy: "M5 11a7 7 0 0 1 13.5-2.6L21 9v4l-2 1-1 4h-3l-.5-1.5h-4L9 18H6l-1-4a4 4 0 0 1 0-3Zm9-1h.01",
+  car: "M5 16V11l2-5h10l2 5v5M3 16h18M7 19v-3m10 3v-3M8 12h8",
+  cart: "M3 4h2l2 11h11l2-8H6M9 20h.01M17 20h.01",
+  receipt: "M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3 5h6m-6 4h6",
 } as const;
 
 export type IconName = keyof typeof PATHS;

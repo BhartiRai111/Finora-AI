@@ -2,6 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockApi, problem, renderWithSession, USER } from "@/test-utils";
+import { MonthProvider } from "@/lib/month";
 import { FinanceApp } from "./FinanceApp";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -25,7 +26,7 @@ const base = {
 describe("FinanceApp", () => {
   it("tells a user without a personal profile that finance is unavailable", async () => {
     mockApi({ ...base, "GET /v1/workspaces": () => ({ status: 200, body: { items: [{ id: "b1", name: "Acme", type: "BUSINESS", role: "ADMIN", membership_id: "m0" }] } }) });
-    renderWithSession(<FinanceApp />);
+    renderWithSession(<MonthProvider initial="2026-03"><FinanceApp /></MonthProvider>);
     expect(await screen.findByText(/no personal profile/i)).toBeInTheDocument();
   });
 
@@ -39,7 +40,7 @@ describe("FinanceApp", () => {
       "GET /v1/spaces/p1/bills?due_within_days=14": () => ({ status: 200, body: { items: [] } }),
       "GET /v1/spaces/p1/goals": () => ({ status: 200, body: { items: [] } }),
     });
-    renderWithSession(<FinanceApp />);
+    renderWithSession(<MonthProvider initial="2026-03"><FinanceApp /></MonthProvider>);
     expect(await screen.findByText("INR 12,34,067.50")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("tab", { name: "Accounts" }));
     expect(await screen.findByText(/you owe/i)).toBeInTheDocument();
@@ -59,7 +60,7 @@ describe("FinanceApp", () => {
         return { status: 201, body: tx("t3", "50.00") };
       },
     });
-    renderWithSession(<FinanceApp />);
+    renderWithSession(<MonthProvider initial="2026-03"><FinanceApp /></MonthProvider>);
     await userEvent.click(await screen.findByRole("tab", { name: "Transactions" }));
     expect(await screen.findByText(/INR 100\.10/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: /load more/i }));

@@ -26,7 +26,7 @@ export function CashFlowPanel({ month, to, currency }: { month: string; to: stri
   const [range, setRange] = useState<(typeof RANGES)[number]["id"]>("6M");
   const months = RANGES.find((r) => r.id === range)!.months;
   return (
-    <section className="panel" aria-labelledby="cash-title">
+    <section className="panel cash-panel" aria-labelledby="cash-title">
       <div className="panel-head">
         <div><h3 id="cash-title">Cash flow</h3><p className="muted" style={{ margin: 0 }}>Income, spending and net saved · {currency}</p></div>
         <div className="seg" role="group" aria-label="Cash flow range">

@@ -4,7 +4,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FinanceProvider } from "@/lib/FinanceContext";
 import { mockApi, problem, renderWithSession, USER } from "@/test-utils";
-import { CalendarPlanner } from "./CalendarPlanner";
+import { MonthProvider } from "@/lib/month";
+import { MonthSelect } from "../shell/MonthSelect";
+import { CalendarPlanner, resolveSelected } from "./CalendarPlanner";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 afterEach(() => vi.unstubAllGlobals());
@@ -134,5 +136,55 @@ describe("calendar (mocked fetch)", () => {
     mockApi(routes({ "GET /v1/spaces/p1/transactions?from=2026-03-01&to=2026-03-31&limit=200": () => ({ status: 200, body: { items: march, next_cursor: "more" } }), "GET /v1/spaces/p1/transactions?from=2026-03-01&to=2026-03-31&limit=200&cursor=more": () => ({ status: 200, body: { items: [], next_cursor: "more" } }) }));
     wrap(<CalendarPlanner />);
     expect(await screen.findByText(/more transactions than can be shown here/)).toBeInTheDocument();
+  });
+});
+
+describe("selected day stays in the month on screen", () => {
+  const withHeader = () => renderWithSession(<FinanceProvider space="p1"><MonthProvider initial="2026-03"><MonthSelect /><CalendarPlanner /></MonthProvider></FinanceProvider>);
+  const headerMonth = () => within(screen.getByRole("group", { name: "Month" }));
+  const april = { "GET /v1/spaces/p1/transactions?from=2026-04-01&to=2026-04-30&limit=200": () => ({ status: 200, body: { items: [tx("t9", "2026-04-10", "40.00", "April thing")], next_cursor: null } }) };
+
+  it("moves the selection into the new month when the header selector changes it, and lists that day's transactions", async () => {
+    mockApi(routes(april));
+    withHeader();
+    await userEvent.click(await screen.findByRole("button", { name: /Tuesday, 10 March 2026/ }));
+    expect(screen.getByRole("heading", { name: "Tuesday, 10 March 2026" })).toBeInTheDocument();
+    await userEvent.click(headerMonth().getByRole("button", { name: "Next month" }));
+    expect(await screen.findByRole("heading", { name: "April 2026" })).toBeInTheDocument(); // calendar title
+    expect(headerMonth().getByText("April 2026")).toBeInTheDocument(); // header month
+    expect(screen.getByRole("group", { name: "Calendar for April 2026" })).toBeInTheDocument(); // grid
+    const details = (await screen.findByRole("heading", { name: "Friday, 10 April 2026" })).closest("section")!; // same day number, in April
+    expect(await within(details).findByText("April thing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /10 April 2026/ })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("heading", { name: /March 2026$/ })).toBeNull();
+  });
+
+  it("uses the last day of a shorter month and carries the day number back, with the calendar arrows and Today in step with the header", async () => {
+    mockApi(routes(april));
+    withHeader();
+    await userEvent.click(await screen.findByRole("button", { name: /Tuesday, 31 March 2026/ }));
+    await userEvent.click(headerMonth().getByRole("button", { name: "Next month" }));
+    expect(await screen.findByRole("heading", { name: "Thursday, 30 April 2026" })).toBeInTheDocument(); // April has no 31st
+    const arrows = screen.getAllByRole("button", { name: "Previous month" }).find((b) => b.closest(".cal-head"))!;
+    await userEvent.click(arrows);
+    expect(await screen.findByRole("heading", { name: "Tuesday, 31 March 2026" })).toBeInTheDocument();
+    expect(headerMonth().getByText("March 2026")).toBeInTheDocument();
+    await userEvent.click(headerMonth().getByRole("button", { name: "Next month" }));
+    await screen.findByRole("heading", { name: "April 2026" });
+    await userEvent.click(screen.getByRole("button", { name: "Today" }));
+    expect(await screen.findByRole("heading", { name: "Sunday, 15 March 2026" })).toBeInTheDocument();
+    expect(headerMonth().getByText("March 2026")).toBeInTheDocument();
+    await userEvent.click(headerMonth().getByRole("button", { name: /This month/ }));
+    await waitFor(() => expect(screen.getByRole("group", { name: /^Calendar for / })).toHaveAccessibleName(/Calendar for (?!March 2026)/)); // "This month" is the browser's real current month
+  });
+});
+
+describe("resolveSelected", () => {
+  const cells = (month: string, last: number) => Array.from({ length: last }, (_, i) => ({ date: `${month}-${String(i + 1).padStart(2, "0")}`, inMonth: true }));
+  it("keeps a day that is in the month, prefers today in the current month, carries the day number, and clamps to the last day", () => {
+    expect(resolveSelected("2026-04-10", "2026-04", "2026-03-15", cells("2026-04", 30))).toBe("2026-04-10");
+    expect(resolveSelected("2026-04-10", "2026-03", "2026-03-15", cells("2026-03", 31))).toBe("2026-03-15");
+    expect(resolveSelected("2026-03-12", "2026-05", "2026-03-15", cells("2026-05", 31))).toBe("2026-05-12");
+    expect(resolveSelected("2026-03-31", "2026-02", "2026-03-15", cells("2026-02", 28))).toBe("2026-02-28");
   });
 });

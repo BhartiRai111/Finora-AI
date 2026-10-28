@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "@/lib/api";
-import { shiftMonth, monthLabel } from "@/lib/calendar";
+import { monthLabel } from "@/lib/calendar";
 import { sumAmounts } from "@/lib/decimal";
 import { CURRENCIES, formatMoney, validateAmountText, type BudgetItem, type Category } from "@/lib/finance";
 import { useFinance } from "@/lib/FinanceContext";
@@ -10,7 +10,6 @@ import { useSelectedMonth } from "@/lib/month";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
 import { ProgressBar } from "../ui/BarChart";
-import { Icon } from "../ui/Icon";
 
 const STATUS_TEXT: Record<BudgetItem["status"], string> = { UNDER: "On track", WARNING: "Close to the limit", OVER: "Over budget" };
 
@@ -69,12 +68,11 @@ export function BudgetsPanel({ categories }: { categories: Category[] }) {
 
   return (
     <>
-      <div className="row" style={{ marginBottom: "1rem" }}>
-        <button type="button" className="icon-btn" aria-label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))}><Icon name="chevronLeft" /></button>
-        <strong aria-live="polite" style={{ minWidth: "10rem", textAlign: "center" }}>{monthLabel(month)}</strong>
-        <button type="button" className="icon-btn" aria-label="Next month" onClick={() => setMonth(shiftMonth(month, 1))}><Icon name="chevronRight" /></button>
-        <label htmlFor="budget-month" className="visually-hidden">Month</label>
+      <div className="budget-toolbar">
+        <h2 className="visually-hidden">Budgets for {monthLabel(month)}</h2>
+        <label htmlFor="budget-month">Month</label>
         <input id="budget-month" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
+        <span className="muted">The month selector in the header moves this page, the dashboard and the calendar together.</span>
       </div>
       {error && <Notice>{error}</Notice>}
       {list.status === "loading" && <Loading label="Loading budgets…" />}
@@ -87,14 +85,14 @@ export function BudgetsPanel({ categories }: { categories: Category[] }) {
       {list.status === "ready" && list.data.items.length === 0 && <p>No budgets yet. Set a monthly limit for a category, or one overall budget.</p>}
       {list.status === "ready" && list.data.items.length > 0 && <BudgetTotals items={list.data.items} />}
       {list.status === "ready" && list.data.items.length > 0 && (
-        <ul className="cards" aria-label="Budgets">
+        <ul className="budget-grid" aria-label="Budgets">
           {list.data.items.map((b) => (
-            <li key={b.id} className="card column">
+            <li key={b.id} className="budget-card">
               <strong>{b.category_name ?? "Everything"}</strong>
               <span>{formatMoney(b.spent, b.currency)} of {formatMoney(b.amount, b.currency)} ({b.percent_used}%)</span>
               <ProgressBar percent={Number(b.percent_used)} tone={b.status === "OVER" ? "over" : b.status === "WARNING" ? "warning" : "under"} label={`${b.category_name ?? "Overall"} budget used`} />
               <span className={`status status-${b.status.toLowerCase()}`}>{STATUS_TEXT[b.status]} — {formatMoney(b.remaining, b.currency)} left</span>
-              <div className="row">
+              <div className="budget-actions">
                 <RaiseForm budget={b} onSave={(v) => void raise(b, v)} />
                 <button type="button" className="link" onClick={() => void archive(b)}>Remove</button>
               </div>
@@ -102,7 +100,7 @@ export function BudgetsPanel({ categories }: { categories: Category[] }) {
           ))}
         </ul>
       )}
-      <form onSubmit={create} aria-labelledby="budget-title" noValidate className="panel" style={{ maxWidth: "30rem" }}>
+      <form onSubmit={create} aria-labelledby="budget-title" noValidate className="panel budget-form">
         <h2 id="budget-title">Set a monthly budget</h2>
         <label htmlFor="budget-category">Category</label>
         <select id="budget-category" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}>
@@ -136,7 +134,7 @@ function RaiseForm({ budget, onSave }: { budget: BudgetItem; onSave: (value: str
 function BudgetTotals({ items }: { items: BudgetItem[] }) {
   const currencies = [...new Set(items.map((b) => b.currency))];
   return (
-    <div className="stat-grid" aria-label="Budget totals">
+    <div className="cluster budget-totals" aria-label="Budget totals">
       {currencies.map((cur) => {
         const mine = items.filter((b) => b.currency === cur);
         const overall = mine.find((b) => b.category_id === null);

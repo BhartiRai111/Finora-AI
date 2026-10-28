@@ -80,3 +80,18 @@ export function averageAmount(values: string[], decimals = 2): string {
   const q = (abs * 2n + den) / (den * 2n);
   return format(num < 0n ? -q : q, decimals);
 }
+
+/** A short form of an exact decimal string for tight spaces (whole units, thousands as "12.3k"; cut, not rounded). Display only: the exact figure is always kept alongside. */
+export function compactAmount(value: string): string {
+  const m = /^-?(\d+)(?:\.\d+)?$/.exec(value.trim());
+  if (!m) return value;
+  const whole = BigInt(m[1]!);
+  const sign = value.trim().startsWith("-") ? "-" : "";
+  if (whole < 1000n) return `${sign}${whole}`;
+  if (whole < 1000000n) {
+    const tenth = (whole % 1000n) / 100n;
+    return `${sign}${whole / 1000n}${tenth > 0n ? `.${tenth}` : ""}k`;
+  }
+  const tenthM = (whole % 1000000n) / 100000n;
+  return `${sign}${whole / 1000000n}${tenthM > 0n ? `.${tenthM}` : ""}M`;
+}

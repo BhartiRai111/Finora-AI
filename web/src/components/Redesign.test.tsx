@@ -77,7 +77,7 @@ describe("budget planner (mocked fetch)", () => {
     expect(screen.getByText(/Close to the limit — INR 200.05 left/)).toBeInTheDocument();
     expect(screen.getByText(/Over budget — INR -0.01 left/)).toBeInTheDocument();
     expect(screen.getAllByRole("progressbar").length).toBe(3);
-    await userEvent.click(screen.getByRole("button", { name: "Next month" }));
+    fireEvent.change(screen.getByLabelText("Month"), { target: { value: next } });
     expect(await screen.findByText(/No budgets yet/)).toBeInTheDocument();
     expect(months).toEqual([month, next]);
   });

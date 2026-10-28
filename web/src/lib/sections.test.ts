@@ -34,8 +34,9 @@ describe("route map", () => {
 
   it("groups navigation in declaration order with the given links", () => {
     const nav = toNav(PERSONAL_SECTIONS, (id) => `/finance/${id}`);
-    expect(nav.map((g) => g.label)).toEqual(["Money", "Plan", "Insights", "Data", "Settings"]);
-    expect(nav[0]!.items[0]).toEqual({ id: "overview", label: "Overview", href: "/finance/overview" });
+    expect(nav.map((g) => g.label)).toEqual(["Main", "Money", "Data", "Settings"]);
+    expect(nav[0]!.items[0]).toEqual({ id: "overview", label: "Overview", href: "/finance/overview", icon: "dashboard" });
+    expect(nav[0]!.items.map((i) => i.label)).toEqual(["Overview", "Calendar", "Transactions", "Budgets", "Analytics & Reports", "Savings goals", "Recurring payments", "AI Insights"]);
   });
 });
 

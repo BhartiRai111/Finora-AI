@@ -47,3 +47,15 @@ export function percentProblem(value: string, label: string): string | null {
   const n = Number(v);
   return n < -100 || n > 1000 ? `${label} must be between -100 and 1000.` : null;
 }
+
+const STATUSES = ["ANSWERED", "NO_DATA", "NEEDS_CLARIFICATION", "UNSUPPORTED"];
+
+/** True when a response has the parts the page needs to show an answer safely; anything else is treated as an unreadable reply, never rendered. */
+export function isReadableAnswer(value: unknown): value is AssistantAnswer {
+  if (typeof value !== "object" || value === null) return false;
+  const a = value as Partial<AssistantAnswer>;
+  return typeof a.status === "string" && STATUSES.includes(a.status) && typeof a.intent === "string" && Array.isArray(a.sections)
+    && a.sections.every((s) => s && Array.isArray(s.columns) && Array.isArray(s.rows) && Array.isArray(s.notes))
+    && Array.isArray(a.notices) && Array.isArray(a.assumptions) && Array.isArray(a.limitations) && Array.isArray(a.sources)
+    && typeof a.ai === "object" && a.ai !== null && typeof a.ai.status === "string";
+}

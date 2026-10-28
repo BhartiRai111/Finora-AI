@@ -11,7 +11,7 @@ type FinanceValue = {
   /** Write with an idempotency key; pass the same `key` again to retry the same intent safely. */
   send: <T>(method: "POST" | "PATCH" | "PUT" | "DELETE", path: string, body?: unknown, key?: string) => Promise<T>;
   /** POST a file as the raw body, e.g. upload("/finance-imports?kind=STATEMENT&filename=a.csv", file, "text/csv"). */
-  upload: <T>(path: string, file: Blob, contentType: string) => Promise<T>;
+  upload: <T>(path: string, file: Blob, contentType: string, key?: string) => Promise<T>;
   /** GET a file; the result carries the server-suggested file name. */
   download: (path: string) => Promise<{ blob: Blob; filename: string }>;
 };
@@ -23,7 +23,7 @@ export function FinanceProvider({ space, children }: { space: string; children: 
     () => ({
       space,
       get: (path, signal) => api(`/v1/spaces/${space}${path}`, { signal }),
-      upload: (path, file, contentType) => apiUpload(`/v1/spaces/${space}${path}`, file, contentType),
+      upload: (path, file, contentType, key) => apiUpload(`/v1/spaces/${space}${path}`, file, contentType, undefined, key),
       download: (path) => apiDownload(`/v1/spaces/${space}${path}`),
       send: (method, path, body, key) => api(`/v1/spaces/${space}${path}`, { method, body, idempotencyKey: key ?? (method === "POST" ? newKey() : undefined) }),
     }),

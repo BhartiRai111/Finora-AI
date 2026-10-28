@@ -37,7 +37,9 @@ export default function RegisterPage() {
   }
 
   return (
-    <main id="main">
+    <main id="main" className="auth-page">
+      <div className="auth-card">
+      <p className="muted" style={{ margin: 0 }}>Create your Finora AI account</p>
       <form onSubmit={submit} aria-labelledby="register-title" noValidate>
         <h1 id="register-title">Create your account</h1>
         <label htmlFor="reg-name">Your name</label>
@@ -54,6 +56,7 @@ export default function RegisterPage() {
           Already registered? <Link href="/login">Sign in</Link>
         </p>
       </form>
+      </div>
     </main>
   );
 }

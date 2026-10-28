@@ -39,7 +39,7 @@ function WorkspaceList() {
   }
 
   return (
-    <main id="main">
+    <main id="main" className="page-narrow">
       <h1>Your workspaces</h1>
       {list.status === "loading" && <Loading label="Loading workspaces…" />}
       {list.status === "error" && (

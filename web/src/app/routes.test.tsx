@@ -33,7 +33,7 @@ describe("/finance routes", () => {
     expect(screen.getByRole("link", { name: "Categories" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "Budgets" })).toHaveAttribute("href", "/finance/budgets");
     expect(screen.queryByRole("tablist")).toBeNull();
-    expect(document.title).toBe("Categories · Personal finance · Finora AI");
+    await waitFor(() => expect(document.title).toBe("Categories · Personal finance · Finora AI"));
   });
 
   it("says plainly when a section does not exist and makes no data request for it", async () => {

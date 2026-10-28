@@ -16,8 +16,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 const me = { "GET /v1/me": () => ({ status: 200, body: USER }) };
 const NAV = [
-  { label: "Money", items: [{ id: "overview", label: "Overview", href: "/finance/overview" }, { id: "accounts", label: "Accounts", href: "/finance/accounts" }] },
-  { label: "Insights", items: [{ id: "reports", label: "Reports", href: "/finance/reports" }] },
+  { label: "Money", items: [{ id: "overview", label: "Overview", href: "/finance/overview", icon: "list" as const }, { id: "accounts", label: "Accounts", href: "/finance/accounts", icon: "list" as const }] },
+  { label: "Insights", items: [{ id: "reports", label: "Reports", href: "/finance/reports", icon: "list" as const }] },
 ];
 
 describe("AppShell", () => {
@@ -49,16 +49,18 @@ describe("AccountMenu", () => {
   it("shows the signed-in person, opens with the keyboard, moves with arrows, closes on Escape and returns focus", async () => {
     mockApi(me);
     renderWithSession(<AccountMenu />);
-    const trigger = await screen.findByRole("button", { name: "Asha" });
+    const trigger = await screen.findByRole("button", { name: /Asha/ });
     expect(trigger).toHaveAttribute("aria-expanded", "false");
     await userEvent.click(trigger);
     expect(trigger).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("asha@example.test")).toBeInTheDocument();
     const items = screen.getAllByRole("menuitem");
-    expect(items.map((i) => i.textContent)).toEqual(["Account and security", "Sign out"]);
+    expect(items.map((i) => i.textContent)).toEqual(["Account and security", "Settings", "Switch to light theme", "Sign out"]);
     expect(items[0]).toHaveFocus();
     await userEvent.keyboard("{ArrowDown}");
     expect(items[1]).toHaveFocus();
+    await userEvent.keyboard("{ArrowUp}{ArrowUp}");
+    expect(items[3]).toHaveFocus();
     await userEvent.keyboard("{ArrowDown}");
     expect(items[0]).toHaveFocus();
     await userEvent.keyboard("{Escape}");
@@ -69,10 +71,10 @@ describe("AccountMenu", () => {
   it("signs out through the server and renders nothing for an anonymous visitor", async () => {
     const { calls } = mockApi({ ...me, "POST /v1/auth/logout": () => ({ status: 204 }) });
     renderWithSession(<AccountMenu />);
-    await userEvent.click(await screen.findByRole("button", { name: "Asha" }));
+    await userEvent.click(await screen.findByRole("button", { name: /Asha/ }));
     await userEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
     await waitFor(() => expect(calls.some((c) => c.key === "POST /v1/auth/logout")).toBe(true));
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Asha" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("button", { name: /Asha/ })).toBeNull());
   });
 });
 
@@ -89,6 +91,25 @@ describe("Header", () => {
     await userEvent.selectOptions(select, "p1");
     expect(nav.push).toHaveBeenLastCalledWith("/finance");
     expect(screen.getByRole("link", { name: "Personal finance" })).toHaveAttribute("aria-current", "page");
+  });
+
+  it("fetches the workspace list again when the page is on a workspace created after it was loaded", async () => {
+    let calls = 0;
+    mockApi({
+      ...me,
+      "GET /v1/workspaces": () => { calls += 1; return { status: 200, body: { items: calls === 1 ? [WS.items[0]] : WS.items } }; },
+    });
+    nav.pathname = "/workspaces/b1/assistant";
+    try {
+      renderWithSession(<Header />);
+      const select = await screen.findByLabelText("Active workspace");
+      await waitFor(() => expect(select).toHaveValue("b1"));
+      // once for the first load, once because the page is on an unknown workspace, and once more when the list changed; never an endless loop
+      expect(calls).toBeGreaterThanOrEqual(2);
+      expect(calls).toBeLessThanOrEqual(3);
+    } finally {
+      nav.pathname = "/finance/budgets";
+    }
   });
 
   it("shows only the brand to someone who is not signed in", async () => {
@@ -176,5 +197,21 @@ describe("shared states", () => {
     expect(screen.getByText("Nothing yet")).toBeInTheDocument();
     expect(screen.getByText("You do not have access to this section.")).toBeInTheDocument();
     expect(screen.getByRole("status")).toHaveTextContent("Loading reports…");
+  });
+});
+
+describe("document title", () => {
+  it("puts the page title back when something else overwrites it, and stops when the page goes away", async () => {
+    const { unmount } = render(<AppShell contextLabel="Acme" nav={NAV} currentId="accounts" title="Accounts">x</AppShell>);
+    expect(document.title).toBe("Accounts · Acme · Finora AI");
+    document.title = "Finora AI";
+    await waitFor(() => expect(document.title).toBe("Accounts · Acme · Finora AI"));
+    // the element itself being replaced (as a framework may do) is also undone
+    document.head.querySelector("title")!.replaceWith(Object.assign(document.createElement("title"), { textContent: "Finora AI" }));
+    await waitFor(() => expect(document.title).toBe("Accounts · Acme · Finora AI"));
+    unmount();
+    document.title = "Elsewhere";
+    await new Promise((r) => setTimeout(r, 30));
+    expect(document.title).toBe("Elsewhere");
   });
 });

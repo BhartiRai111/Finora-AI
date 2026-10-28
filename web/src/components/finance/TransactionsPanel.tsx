@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "@/lib/api";
 import { formatMoney, todayLocal, validateAmountText, type Account, type Category, type Transaction, type TransactionPage } from "@/lib/finance";
 import { useFinance, useIntentKey } from "@/lib/FinanceContext";
+import { compareAmounts } from "@/lib/decimal";
+import { onDataChanged } from "@/lib/dataEvents";
 import { Loading, Notice } from "../Notice";
+import { ReasonDialog } from "../ui/Dialog";
 
 type Kind = "EXPENSE" | "INCOME" | "TRANSFER";
 
@@ -25,6 +28,8 @@ export function TransactionsPanel({ accounts, categories, onChanged }: { account
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tick, setTick] = useState(0);
   const requestId = useRef(0);
+  const [sort, setSort] = useState<{ by: "date" | "amount"; dir: "asc" | "desc" }>({ by: "date", dir: "desc" });
+  const [voiding, setVoiding] = useState<Transaction | null>(null);
 
   const query = useCallback(
     (after: string | null) => {
@@ -59,6 +64,18 @@ export function TransactionsPanel({ accounts, categories, onChanged }: { account
       });
     return () => controller.abort();
   }, [finance.space, query, tick]);
+
+  // A change saved elsewhere (the Add expense dialog, the calendar) shows up here without a reload.
+  useEffect(() => onDataChanged(() => setTick((n) => n + 1)), []);
+
+  // Sorting applies to the rows loaded so far (the server returns newest first and offers no other order).
+  const rows = useMemo(() => {
+    if (sort.by === "date" && sort.dir === "desc") return items;
+    const sorted = [...items].sort((a, b) => (sort.by === "date" ? a.occurred_on.localeCompare(b.occurred_on) : a.currency === b.currency ? compareAmounts(a.amount, b.amount) : a.currency.localeCompare(b.currency)));
+    return sort.dir === "desc" ? sorted.reverse() : sorted;
+  }, [items, sort]);
+  const toggle = (by: "date" | "amount") => setSort((cur) => (cur.by === by ? { by, dir: cur.dir === "asc" ? "desc" : "asc" } : { by, dir: by === "date" ? "desc" : "desc" }));
+  const ariaSort = (by: "date" | "amount") => (sort.by === by ? (sort.dir === "asc" ? "ascending" : "descending") : "none") as "ascending" | "descending" | "none";
 
   async function loadMore() {
     if (!cursor) return;
@@ -136,12 +153,13 @@ export function TransactionsPanel({ accounts, categories, onChanged }: { account
     }
   }
 
-  async function act(t: Transaction, action: "void" | "restore" | "confirm") {
+  async function act(t: Transaction, action: "void" | "restore" | "confirm", reason?: string) {
     setFormError(null);
     try {
-      await finance.send("POST", `/transactions/${t.id}/${action}`, action === "void" ? { reason: "Voided from the app" } : {});
+      await finance.send("POST", `/transactions/${t.id}/${action}`, action === "void" ? { reason: reason || "Voided from the app" } : {});
       refresh();
     } catch (e) {
+      if (action === "void") throw new Error(describeError(e));
       setFormError(describeError(e));
     }
   }
@@ -186,7 +204,7 @@ export function TransactionsPanel({ accounts, categories, onChanged }: { account
 
   return (
     <>
-      <form onSubmit={create} aria-labelledby="tx-title" noValidate>
+      <form onSubmit={create} aria-labelledby="tx-title" noValidate className="panel" style={{ maxWidth: "34rem" }}>
         <h2 id="tx-title">Add a transaction</h2>
         <label htmlFor="tx-kind">Type</label>
         <select id="tx-kind" value={kind} onChange={(e) => { setKind(e.target.value as Kind); setCategoryId(""); }} disabled={busy}>
@@ -238,26 +256,27 @@ export function TransactionsPanel({ accounts, categories, onChanged }: { account
       <section aria-labelledby="tx-list-title">
         <h2 id="tx-list-title">Transactions</h2>
         <div className="filters" role="search" aria-label="Filter transactions">
-          <label htmlFor="f-from">From</label>
-          <input id="f-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <label htmlFor="f-to">To</label>
-          <input id="f-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-          <label htmlFor="f-account">Account</label>
-          <select id="f-account" value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
-            <option value="">All accounts</option>
-            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-          </select>
-          <label htmlFor="f-kind">Type</label>
-          <select id="f-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
-            <option value="">All types</option>
-            <option value="EXPENSE">Expense</option>
-            <option value="INCOME">Income</option>
-            <option value="TRANSFER">Transfer</option>
-            <option value="REFUND">Refund</option>
-            <option value="ADJUSTMENT">Adjustment</option>
-          </select>
-          <label htmlFor="f-search">Search notes</label>
-          <input id="f-search" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="column"><label htmlFor="f-from">From</label><input id="f-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+          <div className="column"><label htmlFor="f-to">To</label><input id="f-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div className="column">
+            <label htmlFor="f-account">Account</label>
+            <select id="f-account" value={accountFilter} onChange={(e) => setAccountFilter(e.target.value)}>
+              <option value="">All accounts</option>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </div>
+          <div className="column">
+            <label htmlFor="f-kind">Type</label>
+            <select id="f-kind" value={kindFilter} onChange={(e) => setKindFilter(e.target.value)}>
+              <option value="">All types</option>
+              <option value="EXPENSE">Expense</option>
+              <option value="INCOME">Income</option>
+              <option value="TRANSFER">Transfer</option>
+              <option value="REFUND">Refund</option>
+              <option value="ADJUSTMENT">Adjustment</option>
+            </select>
+          </div>
+          <div className="column"><label htmlFor="f-search">Search notes</label><input id="f-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" /></div>
           <label><input type="checkbox" checked={showVoided} onChange={(e) => setShowVoided(e.target.checked)} /> Show voided</label>
         </div>
         {loading && <Loading label="Loading transactions…" />}
@@ -272,13 +291,19 @@ export function TransactionsPanel({ accounts, categories, onChanged }: { account
           <table>
             <caption className="visually-hidden">Transactions, newest first</caption>
             <thead>
-              <tr><th scope="col">Date</th><th scope="col">Details</th><th scope="col">Amount</th><th scope="col">Status</th><th scope="col">Actions</th></tr>
+              <tr>
+                <th scope="col" aria-sort={ariaSort("date")}><button type="button" className="link" onClick={() => toggle("date")} style={{ textDecoration: "none", textTransform: "inherit" }}>Date {sort.by === "date" ? (sort.dir === "asc" ? "▲" : "▼") : ""}</button></th>
+                <th scope="col">Details</th>
+                <th scope="col" aria-sort={ariaSort("amount")}><button type="button" className="link" onClick={() => toggle("amount")} style={{ textDecoration: "none", textTransform: "inherit" }}>Amount {sort.by === "amount" ? (sort.dir === "asc" ? "▲" : "▼") : ""}</button></th>
+                <th scope="col">Status</th><th scope="col">Actions</th>
+              </tr>
             </thead>
             <tbody>
-              {items.map((t) => (
+              {rows.map((t) => (
                 <tr key={t.id} className={t.status === "VOIDED" ? "voided" : undefined}>
                   <td>{t.occurred_on}</td>
                   <td>
+                    {t.payee && <strong style={{ display: "block" }}>{t.payee}</strong>}
                     {t.kind === "TRANSFER" ? `Transfer: ${accountName(t.account_id)} → ${accountName(t.to_account_id)}` : `${accountName(t.account_id)}${categoryName(t.category_id) ? ` · ${categoryName(t.category_id)}` : ""}`}
                     {t.note && <div className="muted">{t.note}</div>}
                     {t.tags.length > 0 && <div className="muted">#{t.tags.join(" #")}</div>}
@@ -292,7 +317,7 @@ export function TransactionsPanel({ accounts, categories, onChanged }: { account
                   <td>
                     {t.status === "DRAFT" && <button type="button" className="link" onClick={() => void act(t, "confirm")}>Confirm</button>}
                     {t.status !== "VOIDED" && t.kind !== "ADJUSTMENT" && <button type="button" className="link" onClick={() => startEdit(t)}>Edit</button>}
-                    {t.status !== "VOIDED" && <button type="button" className="link" onClick={() => void act(t, "void")}>Void</button>}
+                    {t.status !== "VOIDED" && <button type="button" className="link" onClick={() => setVoiding(t)}>Void</button>}
                     {t.status === "VOIDED" && <button type="button" className="link" onClick={() => void act(t, "restore")}>Restore</button>}
                   </td>
                 </tr>
@@ -300,9 +325,12 @@ export function TransactionsPanel({ accounts, categories, onChanged }: { account
             </tbody>
           </table>
         )}
+        {items.length > 0 && <p className="muted">Showing {items.length} transaction{items.length === 1 ? "" : "s"}{cursor ? " so far" : ""}. Sorting applies to the rows loaded; the server lists newest first.</p>}
         {cursor && <button type="button" onClick={() => void loadMore()}>Load more</button>}
+        <ReasonDialog open={voiding !== null} title="Void this transaction" description="A voided transaction stays in the history but no longer counts towards balances, budgets or reports. You can restore it later." label="Reason" confirmLabel="Void transaction" danger
+          onConfirm={(reason) => act(voiding!, "void", reason)} onClose={() => setVoiding(null)} />
         {editing && (
-          <form onSubmit={saveEdit} aria-label="Edit transaction" className="card" noValidate>
+          <form onSubmit={saveEdit} aria-label="Edit transaction" className="panel" noValidate>
             <h3>Edit transaction</h3>
             <label htmlFor="ed-amount">Amount ({editing.currency})</label>
             <input id="ed-amount" value={editAmount} onChange={(e) => setEditAmount(e.target.value)} inputMode="decimal" />

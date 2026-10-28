@@ -38,10 +38,12 @@ export default function LoginPage() {
     }
   }
 
-  if (state.status === "mfa") return <main id="main"><MfaForm /></main>;
+  if (state.status === "mfa") return <main id="main" className="auth-page"><div className="auth-card"><MfaForm /></div></main>;
 
   return (
-    <main id="main">
+    <main id="main" className="auth-page">
+      <div className="auth-card">
+      <p className="muted" style={{ margin: 0 }}>Welcome back to Finora AI</p>
       <form onSubmit={submit} aria-labelledby="login-title" noValidate>
         <h1 id="login-title">Sign in</h1>
         <label htmlFor="login-email">Email</label>
@@ -56,6 +58,7 @@ export default function LoginPage() {
           New here? <Link href="/register">Create an account</Link>
         </p>
       </form>
+      </div>
     </main>
   );
 }

@@ -123,7 +123,7 @@ const JOB = {
 
 describe("imports", () => {
   it("refuses Excel files, oversized files and a missing account before anything is sent", async () => {
-    const { fn } = mockApi({ ...me, "GET /v1/spaces/p1/finance-imports?limit=20": () => ({ status: 200, body: empty }) });
+    const { fn } = mockApi({ ...me, "GET /v1/spaces/p1/finance-imports?limit=20&offset=0": () => ({ status: 200, body: empty }) });
     wrap(<ImportsPanel domain="PERSONAL" canWrite accounts={[ACCOUNT]} />);
     await screen.findByText(/No imports yet/);
     const input = screen.getByLabelText(/^CSV file \(UTF-8/);
@@ -131,7 +131,7 @@ describe("imports", () => {
     expect(await screen.findByText("Choose a CSV file first.")).toBeInTheDocument();
     await userEvent.upload(input, new File(["x"], "book.xlsx"), { applyAccept: false });
     await userEvent.click(screen.getByRole("button", { name: "Upload and continue" }));
-    expect(await screen.findByText(/Excel files are not supported/)).toBeInTheDocument();
+    expect(await screen.findByText(/Excel and spreadsheet files are not supported/)).toBeInTheDocument();
     await userEvent.upload(input, new File([new Uint8Array(2 * 1024 * 1024 + 1)], "big.csv", { type: "text/csv" }));
     await userEvent.click(screen.getByRole("button", { name: "Upload and continue" }));
     expect(await screen.findByText(/larger than 2 MB/)).toBeInTheDocument();
@@ -147,11 +147,11 @@ describe("imports", () => {
     const ready = { ...JOB, status: "READY", valid_rows: 2, invalid_rows: 1, possible_duplicate_rows: 1, mapping: JOB.suggested_mapping, options: { date_format: "ISO", decimal_separator: "." }, suggested_mapping: null };
     mockApi({
       ...me,
-      "GET /v1/spaces/p1/finance-imports?limit=20": () => ({ status: 200, body: empty }),
+      "GET /v1/spaces/p1/finance-imports?limit=20&offset=0": () => ({ status: 200, body: empty }),
       "POST /v1/spaces/p1/finance-imports?kind=TRANSACTIONS&filename=bank.csv&account_id=a1": ({ body, headers }) => { seen.file = body; seen.type = headers["Content-Type"]; return { status: 201, body: JOB }; },
       "GET /v1/spaces/p1/finance-imports/j1": () => ({ status: 200, body: phase === "map" ? JOB : phase === "ready" ? ready : { ...ready, status: "PARTIAL", committed_rows: 2, rejected_rows: 1, skipped_rows: 1 } }),
       "PUT /v1/spaces/p1/finance-imports/j1/mapping": ({ body }) => { seen.mapping = body; phase = "ready"; return { status: 200, body: ready }; },
-      "GET /v1/spaces/p1/finance-imports/j1/rows?limit=50": () => ({ status: 200, body: { items: [{ row_number: 2, status: "INVALID", errors: [{ field: "date", message: "'x' is not a valid date" }], raw: ["x", "-1.00", "Bad"], normalized: {}, possible_duplicate_of: null }], total: 1, limit: 50, offset: 0 } }),
+      "GET /v1/spaces/p1/finance-imports/j1/rows?limit=50&offset=0": () => ({ status: 200, body: { items: [{ row_number: 2, status: "INVALID", errors: [{ field: "date", message: "'x' is not a valid date" }], raw: ["x", "-1.00", "Bad"], normalized: {}, possible_duplicate_of: null }], total: 1, limit: 50, offset: 0 } }),
       "POST /v1/spaces/p1/finance-imports/j1/commit": ({ body }) => { seen.commit = body; phase = "done"; return { status: 200, body: { ...ready, status: "PARTIAL", committed_rows: 2, rejected_rows: 1, skipped_rows: 1 } }; },
     });
     wrap(<ImportsPanel domain="PERSONAL" canWrite accounts={[ACCOUNT]} />);
@@ -183,7 +183,7 @@ describe("imports", () => {
   it("is read-only without the right and lists history with counts and failures", async () => {
     mockApi({
       ...me,
-      "GET /v1/spaces/p1/finance-imports?limit=20": () => ({ status: 200, body: { items: [{ ...JOB, status: "COMPLETED", committed_rows: 3, total_rows: 3 }, { ...JOB, id: "j2", filename: "old.csv", status: "FAILED", rejected_rows: 3 }], total: 2, limit: 20, offset: 0 } }),
+      "GET /v1/spaces/p1/finance-imports?limit=20&offset=0": () => ({ status: 200, body: { items: [{ ...JOB, status: "COMPLETED", committed_rows: 3, total_rows: 3 }, { ...JOB, id: "j2", filename: "old.csv", status: "FAILED", rejected_rows: 3 }], total: 2, limit: 20, offset: 0 } }),
     });
     wrap(<ImportsPanel domain="BUSINESS" canWrite={false} accounts={[]} />);
     expect(await screen.findByText("bank.csv")).toBeInTheDocument();

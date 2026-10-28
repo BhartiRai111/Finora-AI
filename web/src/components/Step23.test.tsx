@@ -42,7 +42,7 @@ describe("report charts", () => {
     expect(within(legend).getByText("Net expense")).toBeInTheDocument();
     // the top-of-axis label is the backend's own string, never a computed value
     expect(chart.querySelectorAll("text")[0]).toHaveTextContent("INR 1,500.50");
-    expect(chart.querySelectorAll("rect")).toHaveLength(4);
+    expect(chart.querySelectorAll("rect[data-bar]")).toHaveLength(4);
     expect(screen.getAllByText("INR 700.25", { selector: "td" }).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByRole("table", { name: "INR" })).toBeInTheDocument();
   });

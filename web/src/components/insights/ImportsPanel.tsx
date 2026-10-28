@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { describeError } from "@/lib/api";
 import type { Account } from "@/lib/finance";
-import { useFinance } from "@/lib/FinanceContext";
+import { useFinance, useIntentKey } from "@/lib/FinanceContext";
 import { humanize, saveBlob, type ImportJob, type ImportRow, type Listing } from "@/lib/insights";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
 
 const MAX_BYTES = 2 * 1024 * 1024;
+const HISTORY_PAGE = 20;
+const ROW_PAGE = 50;
+const POLL_MS = 3000;
 const STATUS_TEXT: Record<ImportJob["status"], string> = {
   NEEDS_MAPPING: "Needs column mapping",
   READY: "Ready to import",
@@ -23,7 +26,16 @@ const STATUS_TEXT: Record<ImportJob["status"], string> = {
 export function ImportsPanel({ domain, canWrite, accounts }: { domain: "PERSONAL" | "BUSINESS"; canWrite: boolean; accounts: Account[] }) {
   const finance = useFinance();
   const kinds = domain === "BUSINESS" ? [["EXPENSES", "Expenses"], ["STATEMENT", "Bank statement (for reconciliation)"]] : [["TRANSACTIONS", "Transactions"], ["STATEMENT", "Bank statement (for reconciliation)"]];
-  const list = useResource((signal) => finance.get<Listing<ImportJob>>("/finance-imports?limit=20", signal));
+  const [offset, setOffset] = useState(0);
+  const list = useResource((signal) => finance.get<Listing<ImportJob>>(`/finance-imports?limit=${HISTORY_PAGE}&offset=${offset}`, signal));
+  const seenOffset = useRef(offset);
+  useEffect(() => {
+    if (seenOffset.current !== offset) {
+      seenOffset.current = offset;
+      list.reload();
+    }
+  });
+  const intent = useIntentKey();
   const [selected, setSelected] = useState<string | null>(null);
   const [kind, setKind] = useState(kinds[0]![0]!);
   const [account, setAccount] = useState("");
@@ -36,7 +48,8 @@ export function ImportsPanel({ domain, canWrite, accounts }: { domain: "PERSONAL
   async function upload(event: FormEvent) {
     event.preventDefault();
     if (!file) return setError("Choose a CSV file first.");
-    if (/\.(xlsx|xls|xlsm)$/i.test(file.name)) return setError("Excel files are not supported. In Excel choose Save As, then CSV (UTF-8), and upload that file.");
+    if (/\.(xlsx|xls|xlsm|ods)$/i.test(file.name)) return setError("Excel and spreadsheet files are not supported. In your spreadsheet choose Save As, then CSV (UTF-8), and upload that file.");
+    if (!/\.(csv|txt)$/i.test(file.name)) return setError("Only CSV files are supported. Export your data as CSV (UTF-8) and upload that file.");
     if (file.size === 0) return setError("The file is empty.");
     if (file.size > MAX_BYTES) return setError("The file is larger than 2 MB. Split it into smaller files.");
     if (needsAccount && !account) return setError("Choose the account this file belongs to.");
@@ -45,7 +58,9 @@ export function ImportsPanel({ domain, canWrite, accounts }: { domain: "PERSONAL
     try {
       const q = new URLSearchParams({ kind, filename: file.name });
       if (needsAccount) q.set("account_id", account);
-      const job = await finance.upload<ImportJob>(`/finance-imports?${q.toString()}`, file, "text/csv");
+      // One key per chosen file: a retry after a timeout replays the same upload instead of creating a second import.
+      const job = await finance.upload<ImportJob>(`/finance-imports?${q.toString()}`, file, "text/csv", intent.key());
+      intent.done();
       setFile(null);
       setSelected(job.id);
       list.reload();
@@ -76,7 +91,10 @@ export function ImportsPanel({ domain, canWrite, accounts }: { domain: "PERSONAL
             </>
           )}
           <label htmlFor="imp-file">CSV file (UTF-8, up to 2 MB and 5,000 rows)</label>
-          <input id="imp-file" type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          <input id="imp-file" type="file" accept=".csv,.txt,text/csv" onChange={(e) => { intent.done(); setFile(e.target.files?.[0] ?? null); setError(null); }} />
+          {file && list.status === "ready" && list.data.items.some((j) => j.filename === file.name) && (
+            <p className="muted" role="status">A file named “{file.name}” is already in the history below. You can still upload it; rows that were already imported are recognised and left out as duplicates.</p>
+          )}
           <p className="muted">Excel workbooks are not supported; export the sheet as CSV. The file is only read and checked now; nothing is created until you confirm.</p>
           <button type="submit" disabled={busy}>{busy ? "Uploading…" : "Upload and continue"}</button>
         </form>
@@ -107,6 +125,13 @@ export function ImportsPanel({ domain, canWrite, accounts }: { domain: "PERSONAL
             ))}
           </tbody>
         </table>
+      )}
+      {list.status === "ready" && list.data.total > HISTORY_PAGE && (
+        <div className="filters" role="group" aria-label="Import history pages">
+          <button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - HISTORY_PAGE))}>Previous</button>
+          <span>{offset + 1}-{Math.min(offset + HISTORY_PAGE, list.data.total)} of {list.data.total}</span>
+          <button type="button" disabled={offset + HISTORY_PAGE >= list.data.total} onClick={() => setOffset(offset + HISTORY_PAGE)}>Next</button>
+        </div>
       )}
       {selected && <ImportJobView key={selected} id={selected} canWrite={canWrite} onChanged={list.reload} />}
     </>
@@ -140,7 +165,23 @@ function JobBody({ job, canWrite, reload }: { job: ImportJob; canWrite: boolean;
   const [policy, setPolicy] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [rowStatus, setRowStatus] = useState("");
-  const rows = useResource((signal) => finance.get<Listing<ImportRow>>(`/finance-imports/${job.id}/rows?limit=50${rowStatus ? `&status=${rowStatus}` : ""}`, signal));
+  const [rowOffset, setRowOffset] = useState(0);
+  const rows = useResource((signal) => finance.get<Listing<ImportRow>>(`/finance-imports/${job.id}/rows?limit=${ROW_PAGE}&offset=${rowOffset}${rowStatus ? `&status=${rowStatus}` : ""}`, signal));
+  // The rows are fetched again whenever the view changes or the job itself changed (checked, imported), so they never show a stale state.
+  const rowKey = useRef(`${rowStatus}|${rowOffset}|${job.status}|${job.valid_rows}|${job.invalid_rows}|${job.committed_rows}`);
+  useEffect(() => {
+    const now = `${rowStatus}|${rowOffset}|${job.status}|${job.valid_rows}|${job.invalid_rows}|${job.committed_rows}`;
+    if (rowKey.current !== now) {
+      rowKey.current = now;
+      rows.reload();
+    }
+  });
+  // An import that is still running is checked again until the server says it has finished; nothing is shown as done before then.
+  useEffect(() => {
+    if (job.status !== "COMMITTING") return;
+    const timer = setInterval(reload, POLL_MS);
+    return () => clearInterval(timer);
+  }, [job.status, reload]);
   const editable = job.status === "NEEDS_MAPPING" || job.status === "READY";
 
   async function run<T>(fn: () => Promise<T>): Promise<T | undefined> {
@@ -200,6 +241,13 @@ function JobBody({ job, canWrite, reload }: { job: ImportJob; canWrite: boolean;
       {editable && canWrite && (
         <form onSubmit={saveMapping} aria-label="Column mapping" noValidate>
           <h3>Match the columns</h3>
+          {job.sample && job.sample.length > 0 && (
+            <table>
+              <caption>The first rows of your file, as read (nothing is imported yet)</caption>
+              <thead><tr>{job.headers.map((h) => <th key={h} scope="col">{h}</th>)}</tr></thead>
+              <tbody>{job.sample.map((r, i) => <tr key={i}>{r.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody>
+            </table>
+          )}
           {fields.map((f) => (
             <div key={f} className="column">
               <label htmlFor={`map-${f}`}>{humanize(f)}{job.required_fields.includes(f) ? " (required)" : ""}</label>
@@ -234,7 +282,7 @@ function JobBody({ job, canWrite, reload }: { job: ImportJob; canWrite: boolean;
           <div className="filters">
             <div className="column">
               <label htmlFor="imp-row-status">Show rows</label>
-              <select id="imp-row-status" value={rowStatus} onChange={(e) => setRowStatus(e.target.value)}>
+              <select id="imp-row-status" value={rowStatus} onChange={(e) => { setRowStatus(e.target.value); setRowOffset(0); }}>
                 <option value="">All</option>
                 <option value="VALID">Ready</option>
                 <option value="INVALID">With problems</option>
@@ -265,7 +313,14 @@ function JobBody({ job, canWrite, reload }: { job: ImportJob; canWrite: boolean;
               </tbody>
             </table>
           )}
-          {rows.status === "ready" && rows.data.total > rows.data.items.length && <p className="muted">Showing the first {rows.data.items.length} of {rows.data.total} rows. Download the error report for every problem row.</p>}
+          {rows.status === "ready" && rows.data.total > ROW_PAGE && (
+            <div className="filters" role="group" aria-label="Row pages">
+              <button type="button" disabled={rowOffset === 0} onClick={() => setRowOffset(Math.max(0, rowOffset - ROW_PAGE))}>Previous rows</button>
+              <span>{rowOffset + 1}-{Math.min(rowOffset + ROW_PAGE, rows.data.total)} of {rows.data.total}</span>
+              <button type="button" disabled={rowOffset + ROW_PAGE >= rows.data.total} onClick={() => setRowOffset(rowOffset + ROW_PAGE)}>Next rows</button>
+            </div>
+          )}
+          {rows.status === "ready" && rows.data.total > ROW_PAGE && <p className="muted">Download the error report for every problem row at once.</p>}
         </div>
       )}
 

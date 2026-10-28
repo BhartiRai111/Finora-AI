@@ -31,3 +31,15 @@ describe("exact decimal helpers", () => {
     expect(percentOf("x", "1")).toBeNull();
   });
 });
+
+describe("averages", () => {
+  it("divides exactly and rounds half away from zero at the end", async () => {
+    const { averageAmount } = await import("./decimal");
+    expect(averageAmount(["10.00", "20.00", "30.00"])).toBe("20.00");
+    expect(averageAmount(["10.00", "10.01"])).toBe("10.01"); // 10.005 rounds up
+    expect(averageAmount(["-10.00", "-10.01"])).toBe("-10.01");
+    expect(averageAmount(["1", "2", "2"])).toBe("1.67");
+    expect(averageAmount([])).toBe("0");
+    expect(averageAmount(["100"], 0)).toBe("100");
+  });
+});

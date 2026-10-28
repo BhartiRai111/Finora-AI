@@ -4,8 +4,9 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, describeError } from "@/lib/api";
 import { shiftMonth, monthLabel } from "@/lib/calendar";
 import { sumAmounts } from "@/lib/decimal";
-import { CURRENCIES, currentMonth, formatMoney, validateAmountText, type BudgetItem, type Category } from "@/lib/finance";
+import { CURRENCIES, formatMoney, validateAmountText, type BudgetItem, type Category } from "@/lib/finance";
 import { useFinance } from "@/lib/FinanceContext";
+import { useSelectedMonth } from "@/lib/month";
 import { useResource } from "@/lib/useResource";
 import { Loading, Notice } from "../Notice";
 import { ProgressBar } from "../ui/BarChart";
@@ -15,7 +16,7 @@ const STATUS_TEXT: Record<BudgetItem["status"], string> = { UNDER: "On track", W
 
 export function BudgetsPanel({ categories }: { categories: Category[] }) {
   const finance = useFinance();
-  const [month, setMonth] = useState(currentMonth());
+  const [month, setMonth] = useSelectedMonth();
   const list = useResource((signal) => api<{ month: string; items: BudgetItem[] }>(`/v1/spaces/${finance.space}/budgets?month=${month}`, { signal }));
   // Choosing another month asks the server for that month.
   const shown = useRef(month);

@@ -19,7 +19,8 @@ export function TransactionsPanel({ accounts, categories, onChanged }: { account
   const [to, setTo] = useState("");
   const [accountFilter, setAccountFilter] = useState("");
   const [kindFilter, setKindFilter] = useState("");
-  const [search, setSearch] = useState("");
+  // The header search opens this screen with ?q=… already filled in.
+  const [search, setSearch] = useState(() => (typeof window === "undefined" ? "" : (new URLSearchParams(window.location.search).get("q") ?? "").slice(0, 100)));
   const [showVoided, setShowVoided] = useState(false);
   // data
   const [items, setItems] = useState<Transaction[]>([]);

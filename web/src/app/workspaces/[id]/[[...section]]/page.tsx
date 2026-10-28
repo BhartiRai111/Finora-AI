@@ -10,6 +10,10 @@ import { Loading, Notice } from "@/components/Notice";
 import { SettingsPanel } from "@/components/SettingsPanel";
 import { BusinessApp } from "@/components/business/BusinessApp";
 import { AppShell } from "@/components/shell/AppShell";
+import { HeaderControls } from "@/components/shell/HeaderControls";
+import { ShellRail } from "@/components/shell/ShellRail";
+import { SidebarProfile } from "@/components/shell/SidebarProfile";
+import { TopBar } from "@/components/shell/TopBar";
 import { AccessDenied, EmptyState } from "@/components/ui/States";
 import { api, ApiError, describeError } from "@/lib/api";
 import { roleLabel } from "@/lib/permissions";
@@ -55,7 +59,8 @@ function WorkspaceView({ id, requested }: { id: string; requested: string[] }) {
   else body = <BusinessApp workspace={w} section={section.id} onSectionChange={go} />;
 
   return (
-    <AppShell contextLabel={w.name} badge={`Your role: ${roleLabel(w.role)}`} nav={nav} currentId={section && allowed ? section.id : ""} title={!section ? "Page not found" : allowed ? section.title : "Access denied"} description={allowed ? section?.description : undefined}>
+    <AppShell contextLabel={w.name} badge={`Your role: ${roleLabel(w.role)}`} nav={nav} currentId={section && allowed ? section.id : ""} title={!section ? "Page not found" : allowed ? section.title : "Access denied"} description={allowed ? section?.description : undefined}
+      eyebrow="Business workspace" switcher={<SidebarProfile />} rail={<ShellRail />} topbar={<TopBar trail={[w.name, !section ? "Page not found" : allowed ? section.title : "Access denied"]} />} actions={<HeaderControls />}>
       {body}
     </AppShell>
   );

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { usePersistentFlag } from "@/lib/usePersistentFlag";
 import type { NavGroup } from "@/lib/sections";
-import { Icon } from "../ui/Icon";
+import { Icon, type IconName } from "../ui/Icon";
 
 /**
  * Sets the browser tab title and keeps it: the framework's own metadata handling can write its default title again after a client-side
@@ -26,13 +26,27 @@ function useDocumentTitle(title: string) {
  * The authenticated application frame: a collapsible sidebar of labelled, icon-led sections (a drawer on small screens), a page title with a
  * short description, and the page itself. It holds no data and makes no requests, so it cannot show anything the page did not load.
  */
-export function AppShell({ contextLabel, badge, nav, currentId, title, description, children }: {
+export function AppShell({ contextLabel, badge, nav, currentId, title, description, eyebrow, actions, topbar, rail, switcher, sidebarExtra, footLinks = [], children }: {
   contextLabel: string;
   badge?: string;
   nav: NavGroup[];
   currentId: string;
   title: string;
   description?: string;
+  /** Small label above the page title (defaults to the workspace name). */
+  eyebrow?: string;
+  /** Tools at the right of the page header (search, month, export, notifications, add, account). */
+  actions?: ReactNode;
+  /** The strip above the title (back, breadcrumb, search, notifications). */
+  topbar?: ReactNode;
+  /** The slim icon column at the left edge. */
+  rail?: ReactNode;
+  /** The profile and workspace switcher shown at the top of the sidebar. */
+  switcher?: ReactNode;
+  /** Extra sidebar content, such as the accounts list and the budget status. */
+  sidebarExtra?: ReactNode;
+  /** Links pinned to the bottom of the sidebar (Settings, Help Center). */
+  footLinks?: { label: string; href: string; icon: IconName }[];
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -51,7 +65,8 @@ export function AppShell({ contextLabel, badge, nav, currentId, title, descripti
   }, [open]);
 
   return (
-    <div className={collapsed ? "shell collapsed" : "shell"}>
+    <div className={["shell", collapsed && "collapsed", rail && "has-rail"].filter(Boolean).join(" ")}>
+      {rail}
       <div className="shell-nav-toggle">
         <button type="button" aria-expanded={open} aria-controls={navId} onClick={() => setOpen((v) => !v)}>
           <Icon name={open ? "close" : "menu"} />
@@ -61,6 +76,11 @@ export function AppShell({ contextLabel, badge, nav, currentId, title, descripti
       </div>
       <div className={open ? "shell-backdrop open" : "shell-backdrop"} onClick={() => setOpen(false)} aria-hidden="true" />
       <nav id={navId} ref={drawer} aria-label={`${contextLabel} sections`} className={open ? "shell-nav open" : "shell-nav"}>
+        <Link href="/" className="shell-brand" title="Finora AI home">
+          <span className="brand-mark" aria-hidden="true">F</span>
+          <span className="shell-label">Finora AI</span>
+        </Link>
+        {switcher && <div className="shell-switch">{switcher}</div>}
         <p className="shell-context"><strong>{contextLabel}</strong>{badge && <><br /><span className="badge">{badge}</span></>}</p>
         {nav.map((group) => (
           <div key={group.label} className="shell-group" role="group" aria-label={group.label}>
@@ -77,14 +97,27 @@ export function AppShell({ contextLabel, badge, nav, currentId, title, descripti
             </ul>
           </div>
         ))}
-        <button type="button" className="shell-collapse" onClick={() => setCollapsed(!collapsed)} aria-pressed={collapsed} title={collapsed ? "Expand the sidebar" : "Collapse the sidebar"}>
+        {sidebarExtra && <div className="shell-extra">{sidebarExtra}</div>}
+        <div className="shell-foot">
+          {footLinks.map((l) => (
+            <Link key={l.href} href={l.href} className="shell-link" onClick={() => setOpen(false)} title={collapsed ? l.label : undefined}><Icon name={l.icon} /><span className="shell-label">{l.label}</span></Link>
+          ))}
+          <button type="button" className="shell-collapse shell-link" onClick={() => setCollapsed(!collapsed)} aria-pressed={collapsed} title={collapsed ? "Expand the sidebar" : "Collapse the sidebar"}>
           <Icon name="panelLeft" />
           <span className="shell-label">{collapsed ? "Expand sidebar" : "Collapse sidebar"}</span>
-        </button>
+          </button>
+        </div>
       </nav>
       <main id="main" className="shell-main" tabIndex={-1}>
-        <h1>{title}</h1>
-        {description && <p className="shell-description">{description}</p>}
+        {topbar}
+        <div className="page-head">
+          <div className="page-head-text">
+            <p className="eyebrow">{eyebrow ?? contextLabel}</p>
+            <h1>{title}</h1>
+            {description && <p className="shell-description">{description}</p>}
+          </div>
+          {actions}
+        </div>
         {children}
       </main>
     </div>

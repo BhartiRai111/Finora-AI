@@ -3,6 +3,11 @@ import type { SVGProps } from "react";
 // A small set of 24x24 stroke icons drawn for this app (no icon dependency). Icons are decorative by default (aria-hidden); the label next to
 // them carries the meaning. Pass `title` for the rare icon that stands alone.
 const PATHS = {
+  arrowLeft: "M19 12H5M11 6l-6 6 6 6",
+  arrowRight: "M5 12h14M13 6l6 6-6 6",
+  info: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-10v6m0-9h.01",
+  swap: "M7 7h13M16 3l4 4-4 4M17 17H4M8 13l-4 4 4 4",
+  refresh: "M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7",
   dashboard: "M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z",
   calendar: "M7 3v3M17 3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z",
   list: "M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01",
@@ -46,6 +51,13 @@ const PATHS = {
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z",
   filter: "M4 5h16l-6 8v6l-4-2v-4L4 5Z",
   alert: "M12 4 2.5 20h19L12 4Zm0 6v5m0 3h.01",
+  download: "M12 4v12m0 0 5-5m-5 5-5-5M4 20h16",
+  help: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm-1.5-12a2 2 0 1 1 3 1.7c-.9.5-1.5 1-1.5 2m0 3h.01",
+  home: "M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8Z",
+  piggy: "M5 11a7 7 0 0 1 13.5-2.6L21 9v4l-2 1-1 4h-3l-.5-1.5h-4L9 18H6l-1-4a4 4 0 0 1 0-3Zm9-1h.01",
+  car: "M5 16V11l2-5h10l2 5v5M3 16h18M7 19v-3m10 3v-3M8 12h8",
+  cart: "M3 4h2l2 11h11l2-8H6M9 20h.01M17 20h.01",
+  receipt: "M6 3h12v18l-3-2-3 2-3-2-3 2V3Zm3 5h6m-6 4h6",
 } as const;
 
 export type IconName = keyof typeof PATHS;

@@ -60,10 +60,8 @@ export function QuickSearch({ destinations, onNavigate, onAction }: { destinatio
 
   return (
     <>
-      <button type="button" className="header-search" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Search and quick actions">
-        <Icon name="search" />
-        <span className="search-label">Search or jump to…</span>
-        <kbd aria-hidden="true">Ctrl K</kbd>
+      <button type="button" className="search-pill" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Search and quick actions" title="Jump to a section (Ctrl K)">
+        <Icon name="search" size={18} /><span className="search-pill-text" aria-hidden="true">Global search</span><kbd aria-hidden="true">Ctrl K</kbd>
       </button>
       <Dialog open={open} title="Search and quick actions" onClose={close}>
         <label htmlFor={`${listId}-q`} className="visually-hidden">Search sections</label>

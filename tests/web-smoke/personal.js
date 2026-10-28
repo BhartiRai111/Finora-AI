@@ -248,6 +248,7 @@ const j = new Journey("personal", OUT);
   await j.see(page.getByRole("heading", { level: 1, name: "How Finora AI works" }), "the Help Center page exists and is real guidance");
 
   // ---- account menu and small screen
+  await page.goto(`${B}/finance/overview`);
   await j.see(page.getByRole("link", { name: /account and security/i }), "the sidebar profile opens Account and security");
   await j.see(page.getByRole("button", { name: "Sign out" }), "sign out is on the rail");
   await page.screenshot({ path: `${j.out}/personal-alerts.png` });

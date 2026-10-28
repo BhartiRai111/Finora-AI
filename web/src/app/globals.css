@@ -624,3 +624,13 @@ a.icon-btn:hover { background: var(--surface-3); color: var(--text); }
   .shell-main { padding: var(--space-4); }
 }
 @media (max-width: 480px) { .stat-grid { grid-template-columns: minmax(0, 1fr); } .balance-actions { grid-template-columns: minmax(0, 1fr); } .balance-value { font-size: 1.8rem; } }
+
+/* refinements from the first render against the reference */
+.shell-context { display: none; }
+.shell-description { max-width: 26rem; }
+@media (min-width: 1200px) { .head-tools { flex-wrap: nowrap; } .page-head-text { flex: 1 1 10rem; } }
+@media (max-width: 900px) {
+  .shell { align-content: start; grid-auto-rows: min-content; }
+  .shell-nav-toggle { height: auto; }
+  .shell-nav-toggle button { min-height: 2.4rem; }
+}

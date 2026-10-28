@@ -1,15 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatMoney } from "@/lib/finance";
 import { Legend, Tip, numberOf, useWidth, type ChartSeries } from "./BarChart";
 
-const H = 260;
+const MIN_H = 260;
 const shortMonth = (period: string): string => {
   const [y, m] = period.split("-").map(Number);
   return y && m ? new Date(Date.UTC(y, m - 1, 1)).toLocaleString("en", { month: "short", timeZone: "UTC" }) : period;
 };
 const PAD = { top: 16, right: 12, bottom: 38, left: 112 };
+
+/** The height of the chart box, which grows with the panel it sits in (the box is laid out by CSS; the drawing is positioned inside it, so it never pushes the box taller). */
+function useHeight(ref: React.RefObject<HTMLDivElement | null>): number {
+  const [h, setH] = useState(MIN_H);
+  const last = useRef(MIN_H);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      const next = Math.max(MIN_H, Math.round(el.getBoundingClientRect().height));
+      if (next !== last.current) { last.current = next; setH(next); }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return h;
+}
 
 /**
  * Income, spending and net savings as three bars per month. Numbers only size the drawing; every label is the
@@ -18,6 +35,7 @@ const PAD = { top: 16, right: 12, bottom: 38, left: 112 };
 export function CashFlowChart({ currency, labels, income, spending, net, summary }: { currency: string; labels: string[]; income: (string | undefined)[]; spending: (string | undefined)[]; net: (string | undefined)[]; summary: string }) {
   const [hover, setHover] = useState<number | null>(null);
   const [boxRef, W] = useWidth();
+  const H = useHeight(boxRef);
   const all = [...income, ...spending, ...net].map(numberOf);
   const max = Math.max(0, ...all);
   const min = Math.min(0, ...all);
@@ -31,7 +49,7 @@ export function CashFlowChart({ currency, labels, income, spending, net, summary
   const series: ChartSeries[] = [{ key: "income", label: "Income", values: income }, { key: "spending", label: "Spending", values: spending }, { key: "net", label: "Net saved", values: net }];
   const colors = ["var(--series-pale)", "var(--series-2)", "var(--series-1)"];
   return (
-    <figure className="chart">
+    <figure className="chart chart-fill">
       <Legend series={series} colors={colors} />
       <div className="chart-box" ref={boxRef}>
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} className="chart-svg" style={{ height: H }} onMouseLeave={() => setHover(null)}>

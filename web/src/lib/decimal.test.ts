@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { compareAmounts, isNegative, isZero, percentOf, subtractAmounts, sumAmounts } from "./decimal";
+import { compactAmount, compareAmounts, isNegative, isZero, percentOf, subtractAmounts, sumAmounts } from "./decimal";
 
 describe("exact decimal helpers", () => {
   it("adds without floating-point error", () => {
@@ -41,5 +41,18 @@ describe("averages", () => {
     expect(averageAmount(["1", "2", "2"])).toBe("1.67");
     expect(averageAmount([])).toBe("0");
     expect(averageAmount(["100"], 0)).toBe("100");
+  });
+});
+
+describe("compactAmount", () => {
+  it("shortens exact decimal strings without floating point, cutting rather than rounding", () => {
+    expect(compactAmount("0.99")).toBe("0");
+    expect(compactAmount("950.50")).toBe("950");
+    expect(compactAmount("21840.50")).toBe("21.8k");
+    expect(compactAmount("1000")).toBe("1k");
+    expect(compactAmount("999999.99")).toBe("999.9k");
+    expect(compactAmount("2500000")).toBe("2.5M");
+    expect(compactAmount("-4200.00")).toBe("-4.2k");
+    expect(compactAmount("abc")).toBe("abc");
   });
 });

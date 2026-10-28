@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { api, describeError } from "@/lib/api";
 import { dayLabel, monthCells, monthLabel, monthOf, shiftMonth, weekdayNames } from "@/lib/calendar";
-import { sumAmounts } from "@/lib/decimal";
+import { compactAmount, sumAmounts } from "@/lib/decimal";
 import { formatMoney, type Category, type Commitment, type RecurringRule, type Transaction } from "@/lib/finance";
 import { useFinance } from "@/lib/FinanceContext";
 import { useSelectedMonth } from "@/lib/month";
@@ -51,10 +51,19 @@ export function CalendarPlanner() {
   return <Planner today={settings.data.today} timezone={settings.data.timezone} />;
 }
 
+/** Which day is selected for the month being shown (exported for tests). */
+export function resolveSelected(chosen: string, month: string, today: string, cells: { date: string; inMonth: boolean }[]): string {
+  if (monthOf(chosen) === month) return chosen;
+  if (monthOf(today) === month) return today;
+  const days = cells.filter((c) => c.inMonth).map((c) => c.date);
+  const same = `${month}-${chosen.slice(8)}`;
+  return days.includes(same) ? same : (days[days.length - 1] ?? `${month}-01`);
+}
+
 function Planner({ today, timezone }: { today: string; timezone: string }) {
   const finance = useFinance();
   const [month, setMonth] = useSelectedMonth(monthOf(today));
-  const [selected, setSelected] = useState(today);
+  const [chosen, setSelected] = useState(today);
   const [view, setView] = useState<"month" | "agenda">("month");
   const [adding, setAdding] = useState(false);
   const tx = useMonthTransactions(finance.space, month);
@@ -82,18 +91,15 @@ function Planner({ today, timezone }: { today: string; timezone: string }) {
   const catName = (id: string | null) => (id && categories.status === "ready" ? categories.data.find((c) => c.id === id)?.name : undefined);
 
   const cells = monthCells(month, 1);
+  // The selected day always belongs to the month on screen, whichever control changed the month: today in the current month, otherwise the chosen
+  // day number carried over (the last day when the month is shorter).
+  const selected = resolveSelected(chosen, month, today, cells);
   const dayItems = byDate.get(selected) ?? [];
   const dayDue = dueMap.get(selected) ?? [];
   const dayTotals = expenseTotals(dayItems);
   const agendaDays = [...new Set([...byDate.keys(), ...[...dueMap.keys()].filter((d) => d.startsWith(month))])].filter((d) => d.startsWith(month)).sort();
 
-  function go(next: string) {
-    setMonth(next);
-    // keep the selection in the visible month: the same day number where it exists, otherwise the first day
-    const day = selected.slice(8);
-    const candidate = `${next}-${day}`;
-    setSelected(monthCells(next, 1).some((c) => c.inMonth && c.date === candidate) ? candidate : `${next}-01`);
-  }
+  const go = (next: string) => setMonth(next);
 
   function pick(date: string) {
     setSelected(date);
@@ -144,6 +150,7 @@ function Planner({ today, timezone }: { today: string; timezone: string }) {
                   <button key={c.date} type="button" className={cls} aria-pressed={c.date === selected} aria-label={cellLabel(c.date)} onClick={() => pick(c.date)}>
                     <span className="cal-day">{Number(c.date.slice(8))}</span>
                     {totals[0] && <span className="cal-total">{formatMoney(totals[0].total, totals[0].currency)}{totals.length > 1 ? ` +${totals.length - 1}` : ""}</span>}
+                    {totals[0] && <span className="cal-total-compact" aria-hidden="true" title={formatMoney(totals[0].total, totals[0].currency)}>{compactAmount(totals[0].total)}{totals.length > 1 ? "+" : ""}</span>}
                     <span className="cal-marks" aria-hidden="true">
                       {items.some((t) => t.kind === "EXPENSE") && <span className="cal-dot" />}
                       {hasIncome && <span className="cal-dot income" />}
@@ -184,8 +191,10 @@ function Planner({ today, timezone }: { today: string; timezone: string }) {
         {tx.status === "ready" && (
           <p>
             {dayItems.length === 0 ? "No transactions on this day." : `${dayItems.length} transaction${dayItems.length === 1 ? "" : "s"}.`}
-            {dayTotals.length > 0 && <> Spent: <strong className="num">{dayTotals.map((t) => formatMoney(t.total, t.currency)).join(" · ")}</strong></>}
           </p>
+        )}
+        {tx.status === "ready" && dayTotals.length > 0 && (
+          <p className="day-total">Spent on this day <strong className="num">{dayTotals.map((t) => formatMoney(t.total, t.currency)).join(" · ")}</strong></p>
         )}
         {dayItems.length > 0 && <ul className="tx-list" aria-label="Transactions on this day">{dayItems.map((t) => <TxRow key={t.id} t={t} categoryName={catName(t.category_id)} />)}</ul>}
         {dayDue.length > 0 && (

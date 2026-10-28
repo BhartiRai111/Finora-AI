@@ -634,3 +634,101 @@ a.icon-btn:hover { background: var(--surface-3); color: var(--text); }
   .shell-nav-toggle { height: auto; }
   .shell-nav-toggle button { min-height: 2.4rem; }
 }
+
+/* ==========================================================================
+   Final polish: amounts never wrap, balanced panels, mobile layouts, budget planner
+   ========================================================================== */
+.stat { container-type: inline-size; }
+.stat-value, .balance-value, .wallet-amount, .big-figure, .bill-amount, .cash-summary dd, .plan-summary strong, .gauge figcaption strong { white-space: nowrap; overflow-wrap: normal; }
+.stat-value { font-size: clamp(1.05rem, 9.5cqi, 1.9rem); }
+.balance { container-type: inline-size; }
+.balance-value { font-size: clamp(1.4rem, 9cqi, 2.3rem); }
+.dash-top { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.plan-summary { grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
+.plan-summary > div { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
+.dash-mid { align-items: stretch; }
+.cash-panel { display: flex; flex-direction: column; }
+.cash-panel .chart-fill { flex: 1; display: flex; flex-direction: column; margin: 0; }
+.cash-panel .chart-fill .chart-box { flex: 1; min-height: 260px; }
+.cash-panel .chart-fill .chart-svg { position: absolute; inset: 0; max-width: none; }
+.cash-panel .cash-summary { margin-top: var(--space-3); }
+.plan-list { margin-top: var(--space-3); gap: var(--space-3); }
+
+/* calendar: compact totals in the cells on small screens, a clear total for the selected day */
+.cal-total-compact { display: none; font-size: 0.66rem; font-weight: 650; color: var(--accent); line-height: 1.1; }
+.day-total { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2); padding: var(--space-3); border-radius: var(--r-md); background: var(--surface-1); border: 1px solid var(--border); color: var(--text-muted); }
+.day-total strong { color: var(--heading); font-size: 1.15rem; overflow-wrap: anywhere; }
+
+/* budget planner */
+.budget-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.budget-toolbar label { font-weight: 600; color: var(--heading); margin: 0; }
+.budget-toolbar input { border-radius: var(--r-pill); }
+.budget-toolbar .muted { flex: 1 1 14rem; font-size: 0.8rem; margin: 0; }
+.budget-totals { display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); margin-bottom: var(--space-4); }
+.budget-totals .stat { gap: var(--space-2); }
+.budget-totals .stat-value { white-space: normal; font-size: clamp(1.1rem, 8cqi, 1.9rem); }
+.budget-grid { list-style: none; margin: 0 0 var(--space-5); padding: var(--space-3); display: grid; gap: var(--space-3); grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); background: var(--surface-2); border: 1px solid var(--border); border-radius: 28px; }
+.budget-card { display: grid; gap: var(--space-2); background: var(--surface-1); border: 1px solid var(--border); border-radius: 22px; padding: var(--space-4); min-width: 0; }
+.budget-card > strong { color: var(--heading); font-size: 1.05rem; font-weight: 600; }
+.budget-card > span { overflow-wrap: anywhere; font-size: 0.9rem; }
+.budget-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-1); }
+.budget-actions .row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.budget-actions input { border-radius: var(--r-pill); width: 8rem; }
+.budget-form { max-width: 32rem; display: grid; gap: var(--space-2); }
+.budget-form h2 { margin-top: 0; }
+.budget-form input, .budget-form select { border-radius: var(--r-pill); }
+.budget-form button[type="submit"] { border-radius: var(--r-pill); justify-self: start; min-width: 10rem; margin-top: var(--space-2); }
+
+@media (max-width: 1100px) { .dash-top { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  .shell-nav-toggle { padding: var(--space-3) var(--space-4) 0; background: transparent; border: 0; backdrop-filter: none; position: static; }
+  .shell-nav-toggle > span { display: none; }
+}
+@media (max-width: 640px) {
+  .shell-main { padding: var(--space-3) var(--space-3) var(--space-5); }
+  .topbar { margin-bottom: var(--space-3); }
+  .cluster { padding: var(--space-2); border-radius: 22px; }
+  .panel { border-radius: 22px; }
+  .stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+  .stat { padding: var(--space-3); border-radius: 18px; }
+  .stat-icon { width: 30px; height: 30px; }
+  .stat-top { font-size: 0.9rem; }
+  .balance { padding: var(--space-3); }
+  .wallets { padding: var(--space-3); }
+  .wallet-list { flex-direction: column; overflow: visible; }
+  .wallet { flex: 1 1 auto; }
+  .cash-panel .chart-fill .chart-box { min-height: 220px; }
+  .cal-grid { gap: 2px; }
+  .cal-cell { min-height: 3.9rem; align-content: start; }
+  .cal-total { display: none; }
+  .cal-total-compact { display: block; }
+  /* recent activities: one tidy card per transaction instead of a squeezed table */
+  .data-table, .data-table tbody { display: block; }
+  .table-wrap { padding: var(--space-1) var(--space-3); }
+  .data-table tr { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "desc amount" "date status" "acct status"; gap: 0.15rem var(--space-3); padding: var(--space-3) 0; }
+  .data-table td { display: block; padding: 0; text-align: left; border: 0; min-width: 0; }
+  .data-table td::before { content: none; }
+  .data-table td:nth-child(1) { grid-area: desc; display: flex; align-items: center; gap: var(--space-2); }
+  .data-table td:nth-child(2) { grid-area: date; font-size: 0.8rem; }
+  .data-table td:nth-child(3) { grid-area: acct; font-size: 0.8rem; color: var(--text-muted); }
+  .data-table td:nth-child(4) { grid-area: status; align-self: center; justify-self: end; }
+  .data-table td:nth-child(5) { grid-area: amount; text-align: right; white-space: nowrap; font-weight: 600; }
+  .budget-grid { grid-template-columns: minmax(0, 1fr); padding: var(--space-2); border-radius: 22px; }
+  .budget-card { border-radius: 18px; }
+  .budget-totals { grid-template-columns: minmax(0, 1fr); }
+  .budget-form { max-width: none; }
+}
+.wallet-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(11.5rem, 1fr)); overflow: visible; }
+.wallet { flex: none; min-width: 0; }
+.topbar-trail nav { min-width: 0; }
+.crumbs { flex-wrap: nowrap; min-width: 0; }
+.crumbs li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@media (max-width: 640px) { .crumbs li { padding: 0.3rem 0.7rem; font-size: 0.82rem; } .crumbs li:first-child { flex: none; } }
+
+/* header actions never wrap their labels: the month pill, This month, Export and Add transaction stay on one line (the title block gives way instead) */
+.month-label, .reset-pill, .head-tools .export-wrap button, .head-tools .btn-primary { white-space: nowrap; }
+.month-select { flex: none; }
+@media (min-width: 1200px) {
+  .page-head-text { min-width: 0; }
+  .head-tools { flex: 0 0 auto; flex-wrap: nowrap; }
+}
